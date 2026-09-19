@@ -27,7 +27,9 @@ class BootstrapPage extends StatelessWidget {
           BootstrapViewModel(client: Matrix.of(context).client, reset: reset),
       builder: (context, viewModel, _) {
         final cryptoIdentityState = viewModel.value.cryptoIdentityState;
-        if (cryptoIdentityState?.connected == true && !reset) {
+        if ((cryptoIdentityState?.connected == true ||
+                cryptoIdentityState?.initialized == true) &&
+            !reset) {
           WidgetsBinding.instance.addPostFrameCallback(
             (_) => viewModel.goToRoomsPageAfterSuccess(context),
           );

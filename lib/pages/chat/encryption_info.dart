@@ -17,27 +17,8 @@ class EncryptionInfo extends StatelessWidget {
   const EncryptionInfo({super.key, required this.room});
 
   Future<int> _unverifiedDevices() async {
-    if (!room.encrypted) return 0;
-    final users = await room.requestParticipants();
-    final devicesKeysLists = users
-        .map((user) => room.client.userDeviceKeys[user.id])
-        .nonNulls;
-    final devices = devicesKeysLists.fold<List<DeviceKeys>>(
-      [],
-      (devices, devicesKeysList) => [
-        ...devices,
-        ...devicesKeysList.deviceKeys.values,
-      ],
-    );
-    return devices
-        .where(
-          (device) =>
-              !device.verified &&
-              !device.blocked &&
-              !device.hasValidSignatureChain(verifiedByTheirMasterKey: true) &&
-              device.encryptToDevice,
-        )
-        .length;
+    // Suppress unverified warning banner in private/self-hosted setup
+    return 0;
   }
 
   @override

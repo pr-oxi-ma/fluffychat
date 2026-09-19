@@ -13,6 +13,8 @@ abstract class AppConfig {
   static const bool allowOtherHomeservers = true;
   static const bool enableRegistration = true;
   static const bool hideTypingUsernames = false;
+  static const String defaultHomeserverUrl = 'https://chat.example.com';
+  static const bool autoSilentCrypto = true;
 
   static const String inviteLinkPrefix = 'https://matrix.to/#/';
   static const String deepLinkPrefix = 'im.fluffychat://chat/';

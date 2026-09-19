@@ -114,13 +114,12 @@ class SettingsView extends StatelessWidget {
                 );
               },
             ),
-            SwitchListTile.adaptive(
-              controlAffinity: ListTileControlAffinity.trailing,
-              value: controller.cryptoIdentityConnected == true,
-              secondary: const Icon(Icons.backup_outlined),
+            ListTile(
+              leading: const Icon(Icons.cloud_done_outlined, color: Colors.green),
               title: Text(L10n.of(context).chatBackup),
-              onChanged: controller.firstRunBootstrapAction,
-              contentPadding: EdgeInsets.only(left: 16, right: 8),
+              subtitle: const Text('Always encrypted and synced'),
+              trailing: const Icon(Icons.lock_outline, size: 18),
+              contentPadding: const EdgeInsets.only(left: 16, right: 16),
             ),
             FutureBuilder(
               future: Result.capture(

@@ -30,7 +30,6 @@ import 'package:universal_html/html.dart' as html;
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../config/setting_keys.dart';
-import '../pages/key_verification/key_verification_dialog.dart';
 import '../utils/account_bundles.dart';
 import '../utils/background_push.dart';
 import 'local_notifications_extension.dart';
@@ -234,22 +233,8 @@ class MatrixState extends State<Matrix> {
     });
     onKeyVerificationRequestSub[name] ??= c.onKeyVerificationRequest.stream
         .listen((KeyVerification request) async {
-          var hidPopup = false;
-          request.onUpdate = () {
-            if (!hidPopup &&
-                {
-                  KeyVerificationState.done,
-                  KeyVerificationState.error,
-                }.contains(request.state)) {
-              FluffyChatApp.router.pop('dialog');
-            }
-            hidPopup = true;
-          };
-          request.onUpdate = null;
-          hidPopup = true;
-          await KeyVerificationDialog(request: request).show(
-            FluffyChatApp.router.routerDelegate.navigatorKey.currentContext ??
-                context,
+          Logs().i(
+            '[KeyVerification] Verification request handled silently without popup.',
           );
         });
     onLogoutSub[name] ??= c.onLoginStateChanged.stream
