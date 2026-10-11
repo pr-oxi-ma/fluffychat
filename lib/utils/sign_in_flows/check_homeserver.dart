@@ -38,6 +38,8 @@ Future<void> connectToHomeserverFlow(
       fetchAuthMetadata: true,
     );
 
+    final supportsPassword =
+        loginFlows.any((flow) => flow.type == 'm.login.password');
     final supportsSso = loginFlows.any((flow) => flow.type == 'm.login.sso');
 
     if (signUp && AppConfig.enableNativeInAppRegistration) {
@@ -48,8 +50,24 @@ Future<void> connectToHomeserverFlow(
       return;
     }
 
+    if (!signUp &&
+        AppConfig.enableNativeInAppRegistration &&
+        supportsPassword) {
+      // 100% Native In-App Login inside FluffyChat
+      if (!context.mounted) return;
+      context.push('/home/login', extra: client);
+      setState(AsyncSnapshot.withData(ConnectionState.done, true));
+      return;
+    }
+
+    final ssoFlow =
+        loginFlows.where((flow) => flow.type == 'm.login.sso').firstOrNull;
+    final ssoProviders =
+        (ssoFlow?.additionalProperties['identity_providers'] as List?);
+    final hasSsoProviders = ssoProviders != null && ssoProviders.isNotEmpty;
+
     if ((kIsWeb || PlatformInfos.isLinux) &&
-        (supportsSso || authMetadata != null)) {
+        ((supportsSso && hasSsoProviders) || authMetadata != null)) {
       if (!context.mounted) return;
       final consent = await showOkCancelAlertDialog(
         context: context,
@@ -64,7 +82,7 @@ Future<void> connectToHomeserverFlow(
 
     if (authMetadata != null && AppSettings.enableMatrixNativeOIDC.value) {
       await oidcLoginFlow(client, context, signUp);
-    } else if (supportsSso) {
+    } else if (supportsSso && hasSsoProviders) {
       await ssoLoginFlow(client, context, signUp, loginFlows);
     } else {
       if (!context.mounted) return;
