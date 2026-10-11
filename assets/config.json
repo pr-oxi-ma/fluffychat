@@ -1,0 +1,14 @@
+{
+  "applicationName": "FluffyChat",
+  "defaultHomeserver": "float-congress-farm-hearing.trycloudflare.com",
+  "presetHomeserver": "float-congress-farm-hearing.trycloudflare.com",
+  "welcomeText": "Simple, secure & privacy-first messaging",
+  "sendTypingNotifications": true,
+  "sendPublicReadReceipts": true,
+  "shareOnlineStatus": true,
+  "showPresences": true,
+  "shareKeysWith": "all",
+  "noEncryptionWarningShown": false,
+  "enableSoftLogout": false,
+  "doubleTapToReact": true
+}
