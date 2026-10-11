@@ -180,10 +180,6 @@ class MatrixLocals extends MatrixLocalizations {
     return l10n.kickedAndBanned(senderName, targetName);
   }
 
-  @override
-  String get needPantalaimonWarning => l10n.oopsSomethingWentWrong;
-
-  @override
   String get noPermission => l10n.noKeyForThisMessage;
 
   @override

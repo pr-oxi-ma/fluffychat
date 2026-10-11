@@ -45,7 +45,7 @@ class AutoCryptoSetup {
         );
 
         // Store recovery key in platform secure storage as backup
-        if (recoveryKey != null && _supportsSecureStorage) {
+        if (_supportsSecureStorage) {
           try {
             await FlutterSecureStorage().write(
               key: _secureStorageKey(client.userID),
