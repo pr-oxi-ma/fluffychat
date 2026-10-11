@@ -16,7 +16,6 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 Future<void> connectToHomeserverFlow(
   PublicHomeserverData homeserverData,
@@ -38,11 +37,18 @@ Future<void> connectToHomeserverFlow(
       fetchAuthMetadata: true,
     );
 
-    final regLink = homeserverData.regLink;
     final supportsSso = loginFlows.any((flow) => flow.type == 'm.login.sso');
 
+    if (signUp) {
+      // 100% Native In-App Registration inside FluffyChat
+      if (!context.mounted) return;
+      context.push('/home/register', extra: client);
+      setState(AsyncSnapshot.withData(ConnectionState.done, true));
+      return;
+    }
+
     if ((kIsWeb || PlatformInfos.isLinux) &&
-        (supportsSso || authMetadata != null || (signUp && regLink != null))) {
+        (supportsSso || authMetadata != null)) {
       if (!context.mounted) return;
       final consent = await showOkCancelAlertDialog(
         context: context,
@@ -56,20 +62,12 @@ Future<void> connectToHomeserverFlow(
     if (!context.mounted) return;
 
     if (authMetadata != null && AppSettings.enableMatrixNativeOIDC.value) {
-      await oidcLoginFlow(client, context, signUp);
+      await oidcLoginFlow(client, context, false);
     } else if (supportsSso) {
-      await ssoLoginFlow(client, context, signUp, loginFlows);
+      await ssoLoginFlow(client, context, false, loginFlows);
     } else {
-      if (signUp && regLink != null) {
-        await launchUrlString(regLink);
-      }
       if (!context.mounted) return;
-      final pathSegments = List.of(
-        GoRouter.of(context).routeInformationProvider.value.uri.pathSegments,
-      );
-      if (pathSegments.last != 'home') pathSegments.removeLast();
-      pathSegments.add('login');
-      context.push('/${pathSegments.join('/')}', extra: client);
+      context.push('/home/login', extra: client);
       setState(AsyncSnapshot.withData(ConnectionState.done, true));
       return;
     }
