@@ -5,7 +5,7 @@
 
 import 'package:fluffychat/l10n/l10n.dart';
 import 'package:fluffychat/widgets/layouts/login_scaffold.dart';
-import 'package:go_router/go_router.dart';
+
 import 'package:material_ui/material_ui.dart';
 
 import 'login.dart';
@@ -149,10 +149,7 @@ class LoginView extends StatelessWidget {
                       TextButton(
                         onPressed: controller.loading
                             ? null
-                            : () => context.push(
-                                  '/home/register',
-                                  extra: controller.widget.client,
-                                ),
+                            : controller.handleCreateAccount,
                         child: Text(L10n.of(context).createNewAccount),
                       ),
                     ],

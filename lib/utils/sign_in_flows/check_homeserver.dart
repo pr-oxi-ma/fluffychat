@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'package:fluffychat/config/app_config.dart';
 import 'package:fluffychat/config/setting_keys.dart';
 import 'package:fluffychat/l10n/l10n.dart';
 import 'package:fluffychat/pages/sign_in/view_model/model/public_homeserver_data.dart';
@@ -39,7 +40,7 @@ Future<void> connectToHomeserverFlow(
 
     final supportsSso = loginFlows.any((flow) => flow.type == 'm.login.sso');
 
-    if (signUp) {
+    if (signUp && AppConfig.enableNativeInAppRegistration) {
       // 100% Native In-App Registration inside FluffyChat
       if (!context.mounted) return;
       context.push('/home/register', extra: client);
@@ -62,9 +63,9 @@ Future<void> connectToHomeserverFlow(
     if (!context.mounted) return;
 
     if (authMetadata != null && AppSettings.enableMatrixNativeOIDC.value) {
-      await oidcLoginFlow(client, context, false);
+      await oidcLoginFlow(client, context, signUp);
     } else if (supportsSso) {
-      await ssoLoginFlow(client, context, false, loginFlows);
+      await ssoLoginFlow(client, context, signUp, loginFlows);
     } else {
       if (!context.mounted) return;
       context.push('/home/login', extra: client);
