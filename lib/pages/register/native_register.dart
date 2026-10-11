@@ -296,16 +296,41 @@ class NativeRegisterController extends State<NativeRegister> {
   /// Complete dummy UIAA stage
   Future<void> _completeDummyStage(String username, String password) async {
     final client = widget.client;
-    await client.register(
-      username: username,
-      password: password,
-      initialDeviceDisplayName: PlatformInfos.appDisplayName,
-      auth: AuthenticationData.fromJson({
-        'type': 'm.login.dummy',
-        'session': _uiaaSession,
-      }),
-    );
-    await _finishRegistration(username, password);
+    try {
+      await client.register(
+        username: username,
+        password: password,
+        initialDeviceDisplayName: PlatformInfos.appDisplayName,
+        auth: AuthenticationData.fromJson({
+          'type': 'm.login.dummy',
+          'session': _uiaaSession,
+        }),
+      );
+      await _finishRegistration(username, password);
+    } on MatrixException catch (e) {
+      if (e.errcode == 'M_USER_IN_USE') {
+        setState(() {
+          usernameError = 'Username is already taken';
+          loading = false;
+        });
+        return;
+      }
+      if (e.errcode == 'M_INVALID_USERNAME') {
+        setState(() {
+          usernameError = 'Invalid username for this server';
+          loading = false;
+        });
+        return;
+      }
+      if (e.errcode == 'M_WEAK_PASSWORD') {
+        setState(() {
+          passwordError = 'Password is too weak for this server';
+          loading = false;
+        });
+        return;
+      }
+      rethrow;
+    }
   }
 
   /// Start email verification: request token via SMTP
@@ -457,8 +482,12 @@ class NativeRegisterController extends State<NativeRegister> {
     // Cache password for UIA requests
     matrix.cachedPassword = password;
 
-    // ProtonMail-style: silent auto-crypto vault initialization
-    await AutoCryptoSetup.setup(client, password: password);
+    // ProtonMail-style: silent auto-crypto vault initialization (non-blocking)
+    try {
+      await AutoCryptoSetup.setup(client, password: password);
+    } catch (e) {
+      Logs().w('AutoCryptoSetup non-critical failure during registration: $e');
+    }
 
     // Save default homeserver
     if (client.homeserver != null) {
@@ -724,7 +753,7 @@ class NativeRegisterController extends State<NativeRegister> {
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.person_outlined),
               labelText: 'Username',
-              hintText: 'e.g. adnan',
+              hintText: 'e.g. alice',
               helperText: 'Only lowercase letters, numbers, and .-_',
               errorText: usernameError,
               border: OutlineInputBorder(

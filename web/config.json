@@ -1,7 +1,7 @@
 {
   "applicationName": "FluffyChat",
-  "defaultHomeserver": "float-congress-farm-hearing.trycloudflare.com",
-  "presetHomeserver": "float-congress-farm-hearing.trycloudflare.com",
+  "defaultHomeserver": "stuart-differences-simply-lover.trycloudflare.com",
+  "presetHomeserver": "stuart-differences-simply-lover.trycloudflare.com",
   "welcomeText": "Simple, secure & privacy-first messaging",
   "sendTypingNotifications": true,
   "sendPublicReadReceipts": true,
