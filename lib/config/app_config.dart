@@ -14,7 +14,7 @@ abstract class AppConfig {
   static const bool enableRegistration = true;
   /// When true, registration uses the native in-app form.
   /// When false, registration uses the homeserver's OIDC / Zitadel SSO flow.
-  static const bool enableNativeInAppRegistration = false;
+  static const bool enableNativeInAppRegistration = true;
   static const bool hideTypingUsernames = false;
 
   static const String inviteLinkPrefix = 'https://matrix.to/#/';
