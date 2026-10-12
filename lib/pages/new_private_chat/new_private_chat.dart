@@ -69,20 +69,38 @@ class NewPrivateChatController extends State<NewPrivateChat> {
   }
 
   Future<List<Profile>> _searchUser(String searchTerm) async {
-    final result = await Matrix.of(
-      context,
-    ).client.searchUserDirectory(searchTerm);
-    final profiles = result.results;
+    final client = Matrix.of(context).client;
+    final result = await client.searchUserDirectory(searchTerm);
+    final profiles = List<Profile>.from(result.results);
 
-    if (searchTerm.isValidMatrixIdStrict() &&
-        searchTerm.sigil == '@' &&
-        !profiles.any((profile) => profile.userId == searchTerm)) {
+    // Determine target MXID candidate for direct lookup
+    String? candidate;
+    final trimmed = searchTerm.trim();
+    if (trimmed.isValidMatrixIdStrict() && trimmed.sigil == '@') {
+      candidate = trimmed;
+    } else {
+      final domain = client.userID?.domain;
+      if (domain != null &&
+          domain.isNotEmpty &&
+          !trimmed.contains(':') &&
+          !trimmed.contains(' ')) {
+        final rawUser =
+            trimmed.startsWith('@') ? trimmed.substring(1) : trimmed;
+        if (rawUser.isNotEmpty) {
+          final constructed = '@$rawUser:$domain';
+          if (constructed.isValidMatrixIdStrict()) {
+            candidate = constructed;
+          }
+        }
+      }
+    }
+
+    if (candidate != null && !profiles.any((p) => p.userId == candidate)) {
       try {
-        final info =
-            await Matrix.of(context).client.getUserProfile(searchTerm);
+        final info = await client.getUserProfile(candidate);
         if (info.displayname != null || info.avatarUrl != null) {
           profiles.add(Profile(
-            userId: searchTerm,
+            userId: candidate,
             displayName: info.displayname,
             avatarUrl: info.avatarUrl,
           ));
