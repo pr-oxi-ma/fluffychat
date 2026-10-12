@@ -54,8 +54,10 @@ void main(List<String> args) => runZonedGuarded(() async {
   // Sanitize hash for OIDC:
   if (kIsWeb) {
     final hash = web.window.location.hash;
-    if (hash.isNotEmpty && !hash.startsWith('/')) {
-      web.window.location.hash = hash.replaceFirst('#', '#?');
+    if (hash.isNotEmpty && !hash.startsWith('#/')) {
+      if (!hash.startsWith('#?')) {
+        web.window.location.hash = hash.replaceFirst('#', '#?');
+      }
     }
   }
 
@@ -70,9 +72,16 @@ void main(List<String> args) => runZonedGuarded(() async {
   kEnableMatrixSdkBenchmarks = AppSettings.benchmarksInLogs.value;
 
   if (!_vodozemacInitialized) {
-    await vod.init(
-      wasmPath: './assets/assets/vodozemac/${AppConfig.vodozemacVersion}/',
-    );
+    try {
+      await vod.init(
+        wasmPath: './assets/assets/vodozemac/${AppConfig.vodozemacVersion}/',
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => Logs().w('vodozemac wasm init timed out!'),
+      );
+    } catch (e, s) {
+      Logs().e('vodozemac init error', e, s);
+    }
     _vodozemacInitialized = true;
   }
 
@@ -137,10 +146,22 @@ Future<void> startGui(List<Client> clients, SharedPreferences store) async {
     JustAudioMediaKit.ensureInitialized();
   }
 
-  // Preload first client
+  // Preload first client with a timeout to prevent hanging the GUI startup
   final firstClient = clients.firstOrNull;
-  await firstClient?.roomsLoading;
-  await firstClient?.accountDataLoading;
+  if (firstClient != null && firstClient.isLogged()) {
+    try {
+      final futures = <Future>[
+        if (firstClient.roomsLoading != null) firstClient.roomsLoading!,
+        if (firstClient.accountDataLoading != null) firstClient.accountDataLoading!,
+      ];
+      if (futures.isNotEmpty) {
+        await Future.any([
+          Future.wait(futures),
+          Future.delayed(const Duration(seconds: 3)),
+        ]);
+      }
+    } catch (_) {}
+  }
 
   runApp(
     FluffyChatApp(

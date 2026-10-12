@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:fluffychat/config/setting_keys.dart';
 import 'package:fluffychat/l10n/l10n.dart';
 import 'package:fluffychat/utils/auto_crypto_setup.dart';
+import 'package:fluffychat/utils/client_manager.dart';
 import 'package:fluffychat/utils/disposable_email_checker.dart';
 import 'package:fluffychat/utils/localized_exception_extension.dart';
 import 'package:fluffychat/utils/platform_infos.dart';
@@ -54,6 +56,8 @@ class NativeRegisterController extends State<NativeRegister> {
   bool showPassword = false;
   bool showTokenField = false;
   bool emailRequired = false;
+  bool registrationDisabled = false;
+  bool probingServer = false;
   RegistrationStep step = RegistrationStep.form;
 
   // Email verification state
@@ -62,6 +66,116 @@ class NativeRegisterController extends State<NativeRegister> {
   String? _clientSecret;
   Timer? _resendCooldownTimer;
   int _resendCooldownSeconds = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // 1. Read invite / registration token from URL query params (e.g. ?token=XYZ or ?invite_code=XYZ)
+    try {
+      final uri = Uri.base;
+      String? urlToken = uri.queryParameters['token'] ??
+          uri.queryParameters['invite_code'] ??
+          uri.queryParameters['invite'];
+
+      if ((urlToken == null || urlToken.isEmpty) && uri.fragment.contains('?')) {
+        final fragUri = Uri.tryParse(uri.fragment);
+        if (fragUri != null) {
+          urlToken = fragUri.queryParameters['token'] ??
+              fragUri.queryParameters['invite_code'] ??
+              fragUri.queryParameters['invite'];
+        }
+      }
+
+      if (urlToken != null && urlToken.isNotEmpty) {
+        registrationTokenController.text = urlToken;
+        showTokenField = true;
+      }
+    } catch (_) {}
+
+    // 2. Pre-flight probe homeserver registration capabilities
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _probeServerCapabilities();
+    });
+  }
+
+  /// Probe homeserver dynamically to discover required auth flows on page load
+  Future<void> _probeServerCapabilities() async {
+    var homeserverUri = widget.client.homeserver;
+    if (homeserverUri == null) {
+      final defaultHs = AppSettings.defaultHomeserver.value;
+      if (defaultHs.isNotEmpty) {
+        final parsed = Uri.tryParse(
+          defaultHs.startsWith('http') ? defaultHs : 'https://$defaultHs',
+        );
+        if (parsed != null) {
+          widget.client.homeserver = parsed;
+          homeserverUri = parsed;
+        }
+      }
+    }
+    if (homeserverUri == null) return;
+
+    if (mounted) setState(() => probingServer = true);
+    try {
+      final registerUri =
+          homeserverUri.resolveUri(Uri(path: '/_matrix/client/v3/register'));
+      final response = await widget.client.httpClient.post(
+        registerUri,
+        headers: {'Content-Type': 'application/json'},
+        body: '{}',
+      );
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final rawErrcode = data['errcode'] as String?;
+
+      if (response.statusCode == 403 || rawErrcode == 'M_FORBIDDEN') {
+        if (mounted) {
+          setState(() {
+            registrationDisabled = true;
+            generalError = data['error'] as String? ??
+                'Registration is currently disabled on this server';
+            probingServer = false;
+          });
+        }
+        return;
+      }
+
+      final flows = data['flows'] as List<dynamic>?;
+      if (flows != null) {
+        final allStages = flows
+            .expand((f) =>
+                ((f as Map<String, dynamic>)['stages'] as List<dynamic>))
+            .toSet();
+
+        final hasDummyFlow = flows.any((f) {
+          final stages =
+              (f as Map<String, dynamic>)['stages'] as List<dynamic>;
+          return stages.length == 1 && stages.first == 'm.login.dummy';
+        });
+
+        final needsToken = allStages.contains('m.login.registration_token');
+        final needsEmail = allStages.contains('m.login.email.identity');
+
+        if (mounted) {
+          setState(() {
+            _uiaaSession = data['session'] as String?;
+            if (needsToken && !hasDummyFlow) {
+              showTokenField = true;
+            }
+            if (needsEmail && !hasDummyFlow) {
+              emailRequired = true;
+            }
+            probingServer = false;
+          });
+        }
+      }
+    } catch (e) {
+      Logs().w('Could not pre-probe server capabilities: $e');
+      if (mounted) {
+        setState(() => probingServer = false);
+      }
+    }
+  }
 
   void toggleShowPassword() =>
       setState(() => showPassword = !loading && !showPassword);
@@ -105,11 +219,11 @@ class NativeRegisterController extends State<NativeRegister> {
 
     if (showTokenField && token.isEmpty) {
       return setState(
-          () => generalError = 'Registration token is required by this server');
+          () => generalError = 'Invite code is required to register on this server');
     }
 
-    // Email validation (if required or provided)
-    if (emailRequired || email.isNotEmpty) {
+    // Email validation (only if required by server)
+    if (emailRequired) {
       if (email.isEmpty) {
         return setState(() => emailError = 'Email is required');
       }
@@ -141,6 +255,11 @@ class NativeRegisterController extends State<NativeRegister> {
           if (_uiaaSession != null) 'session': _uiaaSession,
           'token': token,
         });
+      } else {
+        initialAuth = AuthenticationData.fromJson({
+          'type': 'm.login.dummy',
+          if (_uiaaSession != null) 'session': _uiaaSession,
+        });
       }
 
       // Initial register call
@@ -155,40 +274,7 @@ class NativeRegisterController extends State<NativeRegister> {
         await _finishRegistration(username, password);
         return;
       } on MatrixException catch (e) {
-        if (e.errcode == 'M_USER_IN_USE') {
-          return setState(() {
-            usernameError = 'Username is already taken';
-            loading = false;
-          });
-        }
-        if (e.errcode == 'M_INVALID_USERNAME') {
-          return setState(() {
-            usernameError = 'Invalid username for this server';
-            loading = false;
-          });
-        }
-        if (e.errcode == 'M_WEAK_PASSWORD') {
-          return setState(() {
-            passwordError = 'Password is too weak for this server';
-            loading = false;
-          });
-        }
-        if (e.errcode == 'M_FORBIDDEN') {
-          return setState(() {
-            generalError = e.errorMessage.isNotEmpty
-                ? e.errorMessage
-                : 'Registration is disabled on this server';
-            loading = false;
-          });
-        }
-        if (e.errcode == 'M_THREEPID_IN_USE') {
-          return setState(() {
-            emailError = 'This email is already registered';
-            loading = false;
-          });
-        }
-
-        // Parse UIAA 401 response
+        // Parse UIAA 401 response first before checking error codes
         _uiaaSession = e.session ?? e.raw['session'] as String?;
         final flows = e.raw['flows'] as List?;
 
@@ -212,7 +298,7 @@ class NativeRegisterController extends State<NativeRegister> {
             return setState(() {
               showTokenField = true;
               loading = false;
-              generalError = 'This server requires an invite/registration token';
+              generalError = 'This server requires an invite code';
             });
           }
 
@@ -276,6 +362,41 @@ class NativeRegisterController extends State<NativeRegister> {
           await _completeDummyStage(username, password);
           return;
         }
+
+        final rawErrcode = e.raw['errcode'] as String?;
+        if (rawErrcode == 'M_USER_IN_USE') {
+          return setState(() {
+            usernameError = 'Username is already taken';
+            loading = false;
+          });
+        }
+        if (rawErrcode == 'M_INVALID_USERNAME') {
+          return setState(() {
+            usernameError = 'Invalid username for this server';
+            loading = false;
+          });
+        }
+        if (rawErrcode == 'M_WEAK_PASSWORD') {
+          return setState(() {
+            passwordError = 'Password is too weak for this server';
+            loading = false;
+          });
+        }
+        if (rawErrcode == 'M_FORBIDDEN') {
+          return setState(() {
+            generalError = e.errorMessage.isNotEmpty
+                ? e.errorMessage
+                : 'Registration is disabled on this server';
+            loading = false;
+          });
+        }
+        if (rawErrcode == 'M_THREEPID_IN_USE') {
+          return setState(() {
+            emailError = 'This email is already registered';
+            loading = false;
+          });
+        }
+
         rethrow;
       }
     } on MatrixException catch (e) {
@@ -296,16 +417,42 @@ class NativeRegisterController extends State<NativeRegister> {
   /// Complete dummy UIAA stage
   Future<void> _completeDummyStage(String username, String password) async {
     final client = widget.client;
-    await client.register(
-      username: username,
-      password: password,
-      initialDeviceDisplayName: PlatformInfos.appDisplayName,
-      auth: AuthenticationData.fromJson({
-        'type': 'm.login.dummy',
-        'session': _uiaaSession,
-      }),
-    );
-    await _finishRegistration(username, password);
+    try {
+      await client.register(
+        username: username,
+        password: password,
+        initialDeviceDisplayName: PlatformInfos.appDisplayName,
+        auth: AuthenticationData.fromJson({
+          'type': 'm.login.dummy',
+          if (_uiaaSession != null) 'session': _uiaaSession,
+        }),
+      );
+      await _finishRegistration(username, password);
+    } on MatrixException catch (e) {
+      final rawErrcode = e.raw['errcode'] as String?;
+      if (rawErrcode == 'M_USER_IN_USE') {
+        setState(() {
+          usernameError = 'Username is already taken';
+          loading = false;
+        });
+        return;
+      }
+      if (rawErrcode == 'M_INVALID_USERNAME') {
+        setState(() {
+          usernameError = 'Invalid username for this server';
+          loading = false;
+        });
+        return;
+      }
+      if (rawErrcode == 'M_WEAK_PASSWORD') {
+        setState(() {
+          passwordError = 'Password is too weak for this server';
+          loading = false;
+        });
+        return;
+      }
+      rethrow;
+    }
   }
 
   /// Start email verification: request token via SMTP
@@ -457,8 +604,14 @@ class NativeRegisterController extends State<NativeRegister> {
     // Cache password for UIA requests
     matrix.cachedPassword = password;
 
-    // ProtonMail-style: silent auto-crypto vault initialization
-    await AutoCryptoSetup.setup(client, password: password);
+    if (!matrix.widget.clients.contains(client)) {
+      matrix.widget.clients.add(client);
+    }
+    await ClientManager.addClientNameToStore(client.clientName, matrix.store);
+    matrix.setActiveClient(client);
+
+    // ProtonMail-style: silent auto-crypto vault initialization (non-blocking)
+    unawaited(AutoCryptoSetup.setup(client, password: password));
 
     // Save default homeserver
     if (client.homeserver != null) {
@@ -647,11 +800,60 @@ class NativeRegisterController extends State<NativeRegister> {
 
   Widget _buildRegistrationForm(
       ThemeData theme, L10n l10n, String homeserverHost) {
+    if (registrationDisabled) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.errorContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.lock_person_outlined,
+                size: 38,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Registration Closed',
+            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            generalError ?? 'Registration is currently disabled on $homeserverHost.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Back to Login'),
+          ),
+        ],
+      );
+    }
+
     return AutofillGroup(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (probingServer) ...[
+            const LinearProgressIndicator(minHeight: 2),
+            const SizedBox(height: 12),
+          ],
+
           // Logo
           Center(
             child: ClipRRect(
@@ -724,7 +926,7 @@ class NativeRegisterController extends State<NativeRegister> {
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.person_outlined),
               labelText: 'Username',
-              hintText: 'e.g. adnan',
+              hintText: 'e.g. alice',
               helperText: 'Only lowercase letters, numbers, and .-_',
               errorText: usernameError,
               border: OutlineInputBorder(
@@ -734,27 +936,27 @@ class NativeRegisterController extends State<NativeRegister> {
           ),
           const SizedBox(height: 16),
 
-          // Email
-          TextField(
-            controller: emailController,
-            autofillHints: loading ? null : [AutofillHints.email],
-            readOnly: loading,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-            autocorrect: false,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.email_outlined),
-              labelText: emailRequired ? 'Email *' : 'Email',
-              helperText: emailRequired
-                  ? 'Required by server for verification'
-                  : 'Optional (for password recovery)',
-              errorText: emailError,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+          // Email (only if required by server)
+          if (emailRequired) ...[
+            TextField(
+              controller: emailController,
+              autofillHints: loading ? null : [AutofillHints.email],
+              readOnly: loading,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+              autocorrect: false,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.email_outlined),
+                labelText: 'Email *',
+                helperText: 'Required by server for verification',
+                errorText: emailError,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
+          ],
 
           // Password
           TextField(
@@ -812,7 +1014,7 @@ class NativeRegisterController extends State<NativeRegister> {
           ),
           const SizedBox(height: 16),
 
-          // Registration token (if required)
+          // Registration token / Invite Code (if required)
           if (showTokenField) ...[
             TextField(
               controller: registrationTokenController,
@@ -822,8 +1024,9 @@ class NativeRegisterController extends State<NativeRegister> {
               onSubmitted: (_) => register(),
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.vpn_key_outlined),
-                labelText: 'Registration Token',
-                helperText: 'Invite token required by this server',
+                labelText: 'Invite Code',
+                hintText: 'e.g. matrix',
+                helperText: 'Enter your invite code to create an account',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -874,10 +1077,18 @@ class NativeRegisterController extends State<NativeRegister> {
               TextButton(
                 onPressed: loading
                     ? null
-                    : () => context.push(
-                          '/home/login',
+                    : () {
+                        final currentLoc =
+                            GoRouterState.of(context).matchedLocation;
+                        final isAddAccount = currentLoc.contains('addaccount');
+                        final loginRoute = isAddAccount
+                            ? '/rooms/settings/addaccount/login'
+                            : '/home/login';
+                        context.push(
+                          loginRoute,
                           extra: widget.client,
-                        ),
+                        );
+                      },
                 child: Text(l10n.login),
               ),
             ],

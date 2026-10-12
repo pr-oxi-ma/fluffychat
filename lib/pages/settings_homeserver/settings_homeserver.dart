@@ -40,9 +40,27 @@ class SettingsHomeserverController extends State<SettingsHomeserver> {
       );
     }
 
-    final serverVersionResult = await http.get(
-      federationBaseUrl.resolveUri(Uri(path: '/_matrix/federation/v1/version')),
-    );
+    http.Response serverVersionResult;
+    try {
+      serverVersionResult = await http.get(
+        federationBaseUrl.resolveUri(Uri(path: '/_matrix/federation/v1/version')),
+      );
+      if (serverVersionResult.statusCode != 200 && client.homeserver != null) {
+        serverVersionResult = await http.get(
+          client.homeserver!.resolveUri(Uri(path: '/_matrix/federation/v1/version')),
+        );
+        federationBaseUrl = client.homeserver!;
+      }
+    } catch (_) {
+      if (client.homeserver != null) {
+        serverVersionResult = await http.get(
+          client.homeserver!.resolveUri(Uri(path: '/_matrix/federation/v1/version')),
+        );
+        federationBaseUrl = client.homeserver!;
+      } else {
+        rethrow;
+      }
+    }
     final {
       'server': {'name': String name, 'version': String version},
     } = Map<String, Map<String, dynamic>>.from(

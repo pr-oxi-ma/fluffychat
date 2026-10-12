@@ -5,9 +5,7 @@
 
 import 'package:fluffychat/config/themes.dart';
 import 'package:fluffychat/l10n/l10n.dart';
-import 'package:fluffychat/pages/chat/utd_dialog.dart';
 import 'package:fluffychat/utils/matrix_sdk_extensions/matrix_locals.dart';
-import 'package:fluffychat/widgets/avatar.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
@@ -61,34 +59,18 @@ class StateMessage extends StatelessWidget {
                               WidgetSpan(
                                 child: Padding(
                                   padding: const EdgeInsets.only(right: 4.0),
-                                  child: Avatar(
-                                    name: event.senderFromMemoryOrFallback
-                                        .calcDisplayname(),
-                                    size: 14,
-                                    mxContent: event
-                                        .senderFromMemoryOrFallback
-                                        .avatarUrl,
+                                  child: SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator.adaptive(
+                                      strokeWidth: 1.5,
+                                    ),
                                   ),
                                 ),
                               ),
                               TextSpan(
-                                text: L10n.of(context).messageNotDecryptable,
+                                text: L10n.of(context).loadingPleaseWait,
                               ),
-                              if (!event.redacted)
-                                WidgetSpan(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 4.0),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(7),
-                                      onTap: () =>
-                                          UtdDialog.show(context, event),
-                                      child: Icon(
-                                        Icons.info_outlined,
-                                        size: 14,
-                                      ),
-                                    ),
-                                  ),
-                                ),
                             ],
                             if (onExpand != null) ...[
                               const TextSpan(text: '\n'),

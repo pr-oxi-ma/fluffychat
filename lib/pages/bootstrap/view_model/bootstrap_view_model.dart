@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import 'package:file_picker/file_picker.dart';
+import 'package:fluffychat/utils/auto_crypto_setup.dart';
 import 'package:fluffychat/utils/error_reporter.dart';
 import 'package:fluffychat/utils/localized_exception_extension.dart';
 import 'package:fluffychat/utils/platform_infos.dart';
@@ -73,6 +74,19 @@ class BootstrapViewModel extends ValueNotifier<BootstrapViewModelState> {
     enterPassphraseOrRecovController.addListener(
       _passphraseOrRecoveryKeyEntered,
     );
+
+    // Silent auto-bootstrap for SSO/OIDC flows (no password available).
+    // Password login is already handled by login.dart → AutoCryptoSetup.
+    if (!reset) {
+      final success = await AutoCryptoSetup.setup(client);
+      if (success) {
+        value.cryptoIdentityState = await client.getCryptoIdentityState();
+        notifyListeners();
+        return;
+      }
+    }
+
+    // Fallback: if auto-bootstrap failed, check secure storage for recovery key
     if (state.initialized) {
       if (state.connected) return notifyListeners();
 
@@ -149,16 +163,27 @@ class BootstrapViewModel extends ValueNotifier<BootstrapViewModelState> {
     value.isLoading = true;
     notifyListeners();
     try {
-      value.recoveryKey = await client.initCryptoIdentity(
-        passphrase: passphrase,
-        wipeCrossSigning: !reset,
-        wipeKeyBackup: !reset,
-        wipeSecureStorage: !reset,
-        setupOnlineKeyBackup: !reset,
-        setupMasterKey: !reset,
-        setupSelfSigningKey: !reset,
-        setupUserSigningKey: !reset,
-      );
+      if (reset) {
+        final ssss = client.encryption!.ssss;
+        final newKey = await ssss.createKey(passphrase);
+
+        for (final type in cacheTypes) {
+          final secret = await ssss.getCached(type);
+          if (secret == null) {
+            throw Exception(
+              'Migration failed! Missing secret in cache "$type"',
+            );
+          }
+          await newKey.store(type, secret, add: true);
+        }
+        await ssss.setDefaultKeyId(newKey.keyId);
+        await client.dehydratedDeviceSetup(newKey);
+        value.recoveryKey = newKey.recoveryKey;
+      } else {
+        value.recoveryKey = await client.initCryptoIdentity(
+          passphrase: passphrase,
+        );
+      }
     } catch (e, s) {
       if (!context.mounted) return;
       ErrorReporter(
@@ -195,7 +220,7 @@ class BootstrapViewModel extends ValueNotifier<BootstrapViewModelState> {
     value.isLoading = true;
     notifyListeners();
     try {
-      await client.restoreCryptoIdentity(key);
+      await client.restoreCryptoIdentity(key, selfSign: false);
       value.isLoading = false;
       value.cryptoIdentityState = await client.getCryptoIdentityState();
       notifyListeners();

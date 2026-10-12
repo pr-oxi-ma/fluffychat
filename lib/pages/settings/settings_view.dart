@@ -114,12 +114,13 @@ class SettingsView extends StatelessWidget {
                 );
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.cloud_done_outlined, color: Colors.green),
+            SwitchListTile.adaptive(
+              controlAffinity: ListTileControlAffinity.trailing,
+              value: true, // Auto-locked to true
+              secondary: const Icon(Icons.backup_outlined),
               title: Text(L10n.of(context).chatBackup),
-              subtitle: const Text('Always encrypted and synced'),
-              trailing: const Icon(Icons.lock_outline, size: 18),
-              contentPadding: const EdgeInsets.only(left: 16, right: 16),
+              onChanged: null, // Disabled so user cannot toggle
+              contentPadding: EdgeInsets.only(left: 16, right: 8),
             ),
             FutureBuilder(
               future: Result.capture(

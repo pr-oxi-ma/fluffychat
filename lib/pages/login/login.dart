@@ -5,9 +5,13 @@
 
 import 'dart:async';
 
+import 'package:fluffychat/config/app_config.dart';
+import 'package:fluffychat/config/setting_keys.dart';
 import 'package:fluffychat/l10n/l10n.dart';
-import 'package:fluffychat/utils/auto_crypto_vault.dart';
+import 'package:fluffychat/pages/sign_in/view_model/model/public_homeserver_data.dart';
+import 'package:fluffychat/utils/auto_crypto_setup.dart';
 import 'package:fluffychat/utils/localized_exception_extension.dart';
+import 'package:fluffychat/utils/sign_in_flows/check_homeserver.dart';
 import 'package:fluffychat/widgets/adaptive_dialogs/show_ok_cancel_alert_dialog.dart';
 import 'package:fluffychat/widgets/adaptive_dialogs/show_text_input_dialog.dart';
 import 'package:fluffychat/widgets/future_loading_dialog.dart';
@@ -35,6 +39,22 @@ class LoginController extends State<Login> {
   bool loading = false;
   bool showPassword = false;
 
+  @override
+  void initState() {
+    super.initState();
+    if (widget.client.homeserver == null) {
+      final defaultHs = AppSettings.defaultHomeserver.value;
+      if (defaultHs.isNotEmpty) {
+        final parsed = Uri.tryParse(
+          defaultHs.startsWith('http') ? defaultHs : 'https://$defaultHs',
+        );
+        if (parsed != null) {
+          widget.client.homeserver = parsed;
+        }
+      }
+    }
+  }
+
   void toggleShowPassword() =>
       setState(() => showPassword = !loading && !showPassword);
 
@@ -61,6 +81,7 @@ class LoginController extends State<Login> {
 
     try {
       final username = usernameController.text;
+      final password = passwordController.text;
       AuthenticationIdentifier identifier;
       if (username.isEmail) {
         identifier = AuthenticationThirdPartyIdentifier(
@@ -84,15 +105,24 @@ class LoginController extends State<Login> {
         user: identifier.type == AuthenticationIdentifierTypes.userId
             ? username
             : null,
-        password: passwordController.text,
+        password: password,
         initialDeviceDisplayName: PlatformInfos.appDisplayName,
       );
-      await AutoCryptoVault.setupOrRestore(
-        client,
-        username,
-        passwordController.text,
-      );
+
+      // Cache password for UIA requests (e.g. dehydrated device setup)
+      matrix.cachedPassword = password;
+
+      if (!matrix.widget.clients.contains(client)) {
+        matrix.widget.clients.add(client);
+      }
+      matrix.setActiveClient(client);
+
+      // ProtonMail-style: use password as SSSS passphrase to auto-setup
+      // or auto-restore crypto identity. Run non-blocking in background.
+      unawaited(AutoCryptoSetup.setup(client, password: password));
+
       if (mounted) {
+        // Go straight to rooms — no bootstrap page, no verification
         context.go('/rooms');
       }
     } on MatrixException catch (exception) {
@@ -104,6 +134,27 @@ class LoginController extends State<Login> {
     }
 
     if (mounted) setState(() => loading = false);
+  }
+
+  void handleCreateAccount() {
+    final currentLoc = GoRouterState.of(context).matchedLocation;
+    final isAddAccount = currentLoc.contains('addaccount');
+    final regRoute = isAddAccount ? '/rooms/settings/addaccount/register' : '/home/register';
+    if (AppConfig.enableNativeInAppRegistration) {
+      context.push(regRoute, extra: widget.client);
+    } else {
+      final hs = widget.client.homeserver;
+      if (hs != null) {
+        connectToHomeserverFlow(
+          PublicHomeserverData(name: hs.host),
+          context,
+          (_) {},
+          true,
+        );
+      } else {
+        context.push(regRoute, extra: widget.client);
+      }
+    }
   }
 
   Timer? _coolDown;

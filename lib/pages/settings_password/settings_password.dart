@@ -5,10 +5,12 @@
 
 import 'package:fluffychat/l10n/l10n.dart';
 import 'package:fluffychat/pages/settings_password/settings_password_view.dart';
+import 'package:fluffychat/utils/auto_crypto_setup.dart';
 import 'package:fluffychat/utils/localized_exception_extension.dart';
 import 'package:fluffychat/widgets/matrix.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:matrix/matrix.dart';
 
 class SettingsPassword extends StatefulWidget {
   const SettingsPassword({super.key});
@@ -59,10 +61,24 @@ class SettingsPasswordController extends State<SettingsPassword> {
       loading = true;
     });
     try {
-      await Matrix.of(context).client.changePassword(
-        newPassword1Controller.text,
+      final matrix = Matrix.of(context);
+      final client = matrix.client;
+      final newPass = newPassword1Controller.text;
+      await client.changePassword(
+        newPass,
         oldPassword: oldPasswordController.text,
       );
+
+      // Update cached password for UIA
+      matrix.cachedPassword = newPass;
+
+      // Re-key SSSS seamlessly so that new devices can decrypt without recovery prompts
+      try {
+        await AutoCryptoSetup.rotatePassword(client, newPassword: newPass);
+      } catch (cryptoErr) {
+        Logs().w('Non-critical failure rotating SSSS passphrase: $cryptoErr');
+      }
+
       if (!mounted) return;
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text(l10n.passwordHasBeenChanged)),

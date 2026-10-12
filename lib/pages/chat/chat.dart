@@ -499,7 +499,6 @@ class ChatController extends State<ChatPageWithRoom>
       if (readMarkerEventIndex > 1) {
         Logs().v('Scroll up to visible event', readMarkerEventId);
         scrollToEventId(readMarkerEventId, highlightEvent: false);
-        return;
       } else if (readMarkerEventId.isNotEmpty && readMarkerEventIndex == -1) {
         _showScrollUpMaterialBanner(readMarkerEventId);
       }
@@ -596,8 +595,10 @@ class ChatController extends State<ChatPageWithRoom>
     // We are already setting a read marker
     if (_setReadMarkerFuture != null) return;
 
+    final setOnLatestEvent = eventId == null;
+
     // We only set read marker if we are at the bottom
-    if (_scrolledUp) return;
+    if (_scrolledUp && setOnLatestEvent) return;
 
     // We do not set read marker if we offer user the scroll up banner
     if (scrollUpBannerEventId != null) return;
@@ -613,19 +614,16 @@ class ChatController extends State<ChatPageWithRoom>
       return;
     }
 
-    final setOnLatestEvent = eventId == null;
     eventId ??= timeline.events
         .firstWhereOrNull(
-          (event) => room.pushRuleState == PushRuleState.notify
-              ? room.client.pushruleEvaluator.match(event).notify
-              : {
-                      EventTypes.Message,
-                      EventTypes.Encrypted,
-                      EventTypes.Sticker,
-                    }.contains(event.type) &&
-                    event.eventId.isValidMatrixIdStrict(),
+          (event) => room.client.pushruleEvaluator.match(event).notify,
         )
         ?.eventId;
+
+    if (setOnLatestEvent && (room.hasNewMessages || room.isUnread)) {
+      eventId ??=
+          room.lastEvent?.eventId ?? timeline.events.firstOrNull?.eventId;
+    }
 
     // There is no event we could place a read marker
     if (eventId == null) return;
@@ -651,7 +649,7 @@ class ChatController extends State<ChatPageWithRoom>
           eventId: eventId,
           public: AppSettings.sendPublicReadReceipts.value,
         )
-        .then((_) {
+        .whenComplete(() {
           _setReadMarkerFuture = null;
         });
   }

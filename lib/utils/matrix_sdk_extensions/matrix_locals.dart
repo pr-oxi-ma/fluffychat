@@ -116,7 +116,7 @@ class MatrixLocals extends MatrixLocalizations {
 
   @override
   String couldNotDecryptMessage(String errorText) {
-    return l10n.couldNotDecryptMessage(errorText);
+    return 'Decrypting...';
   }
 
   @override

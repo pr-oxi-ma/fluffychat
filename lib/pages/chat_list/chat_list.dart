@@ -434,6 +434,7 @@ class ChatListController extends State<ChatList>
         ).store.getString(_serverStoreNamespace);
         Matrix.of(context).backgroundPush?.setupPush(context);
         UpdateNotifier.showUpdateDialog(context);
+        UpdateNotifier.showUpdateAvailableBanner(context);
       }
 
       // Workaround for system UI overlay style not applied on app start
@@ -927,33 +928,17 @@ class ChatListController extends State<ChatList>
       waitForFirstSync = true;
     });
 
-    if (client.userDeviceKeys[client.userID!]?.deviceKeys.values.any(
-          (device) => !device.verified && !device.blocked,
-        ) ??
-        false) {
-      late final ScaffoldFeatureController controller;
-      final theme = Theme.of(context);
-      controller = ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 15),
-          showCloseIcon: true,
-          backgroundColor: theme.colorScheme.errorContainer,
-          closeIconColor: theme.colorScheme.onErrorContainer,
-          content: Text(
-            L10n.of(context).oneOfYourDevicesIsNotVerified,
-            style: TextStyle(color: theme.colorScheme.onErrorContainer),
-          ),
-          action: SnackBarAction(
-            onPressed: () {
-              controller.close();
-              router.go('/rooms/settings/devices');
-            },
-            textColor: theme.colorScheme.onErrorContainer,
-            label: L10n.of(context).settings,
-          ),
-        ),
-      );
-    }
+    try {
+      final ownUnverified = client.userDeviceKeys[client.userID!]?.deviceKeys.values
+          .where((device) => !device.verified && !device.blocked)
+          .toList();
+      if (ownUnverified != null &&
+          ownUnverified.isNotEmpty &&
+          (await client.encryption?.crossSigning.isCached() ?? false)) {
+        await client.encryption?.crossSigning.sign(ownUnverified);
+        await client.updateUserDeviceKeys();
+      }
+    } catch (_) {}
   }
 
   void setActiveFilter(ActiveFilter filter, String? tag) {

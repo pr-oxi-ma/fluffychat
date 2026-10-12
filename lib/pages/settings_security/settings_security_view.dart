@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'package:fluffychat/config/app_config.dart';
 import 'package:fluffychat/config/setting_keys.dart';
 import 'package:fluffychat/config/themes.dart';
 import 'package:fluffychat/l10n/l10n.dart';
@@ -15,6 +16,7 @@ import 'package:fluffychat/widgets/settings_switch_list_tile.dart';
 import 'package:go_router/go_router.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:matrix/matrix.dart';
 
 import 'settings_security.dart';
 
@@ -145,10 +147,30 @@ class SettingsSecurityView extends StatelessWidget {
                     subtitle: Text(L10n.of(context).shareKeysWithDescription),
                   ),
                   ListTile(
-                    leading: const Icon(Icons.vpn_key_outlined),
-                    title: Text(L10n.of(context).allDevices),
-                    subtitle: const Text('Keys are automatically shared with all signed devices'),
-                    trailing: const Icon(Icons.lock_outline, size: 18),
+                    title: Material(
+                      borderRadius: BorderRadius.circular(
+                        AppConfig.borderRadius / 2,
+                      ),
+                      color: theme.colorScheme.onInverseSurface,
+                      child: DropdownButton<ShareKeysWith>(
+                        isExpanded: true,
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        borderRadius: BorderRadius.circular(
+                          AppConfig.borderRadius / 2,
+                        ),
+                        underline: const SizedBox.shrink(),
+                        value: Matrix.of(context).client.shareKeysWith,
+                        items: ShareKeysWith.values
+                            .map(
+                              (share) => DropdownMenuItem(
+                                value: share,
+                                child: Text(share.localized(L10n.of(context))),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: controller.changeShareKeysWith,
+                      ),
+                    ),
                   ),
                   Divider(color: theme.dividerColor),
                   ListTile(
@@ -187,7 +209,15 @@ class SettingsSecurityView extends StatelessWidget {
                           context.go('/rooms/settings/security/password'),
                     ),
                   Divider(color: theme.dividerColor),
-
+                  ListTile(
+                    iconColor: Colors.orange,
+                    leading: const Icon(Icons.delete_sweep_outlined),
+                    title: Text(
+                      L10n.of(context).dehydrate,
+                      style: const TextStyle(color: Colors.orange),
+                    ),
+                    onTap: controller.dehydrateAction,
+                  ),
                   ListTile(
                     iconColor: Colors.red,
                     leading: const Icon(Icons.delete_outlined),
@@ -204,5 +234,20 @@ class SettingsSecurityView extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+extension on ShareKeysWith {
+  String localized(L10n l10n) {
+    switch (this) {
+      case ShareKeysWith.all:
+        return l10n.allDevices;
+      case ShareKeysWith.crossVerifiedIfEnabled:
+        return l10n.crossVerifiedDevicesIfEnabled;
+      case ShareKeysWith.crossVerified:
+        return l10n.crossVerifiedDevices;
+      case ShareKeysWith.directlyVerifiedOnly:
+        return l10n.verifiedDevicesOnly;
+    }
   }
 }

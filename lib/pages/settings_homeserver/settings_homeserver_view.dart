@@ -60,16 +60,7 @@ class SettingsHomeserverView extends StatelessWidget {
                   final error = snapshot.error;
                   final data = snapshot.data;
                   if (error != null) {
-                    return ListTile(
-                      leading: const Icon(Icons.error_outlined),
-                      title: Text(
-                        error.toLocalizedString(
-                          context,
-                          ExceptionContext.checkServerSupportInfo,
-                        ),
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    );
+                    return const SizedBox.shrink();
                   }
                   if (data == null) {
                     return const Center(

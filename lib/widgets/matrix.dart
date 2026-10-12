@@ -8,6 +8,7 @@ import 'dart:convert';
 
 import 'package:collection/collection.dart';
 import 'package:fluffychat/l10n/l10n.dart';
+import 'package:fluffychat/utils/auto_crypto_setup.dart';
 import 'package:fluffychat/utils/client_manager.dart';
 import 'package:fluffychat/utils/init_with_restore.dart';
 import 'package:fluffychat/utils/matrix_sdk_extensions/matrix_file_extension.dart';
@@ -30,6 +31,7 @@ import 'package:universal_html/html.dart' as html;
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../config/setting_keys.dart';
+
 import '../utils/account_bundles.dart';
 import '../utils/background_push.dart';
 import 'local_notifications_extension.dart';
@@ -164,7 +166,9 @@ class MatrixState extends State<Matrix> {
                 _registerSubs(_loginClientCandidate!.clientName);
                 setActiveClient(_loginClientCandidate);
                 _loginClientCandidate = null;
-                FluffyChatApp.router.go('/backup');
+                // Navigation handled by each login flow (login.dart, check_homeserver.dart, etc.)
+                // Password login → /rooms (after auto-crypto)
+                // SSO/OIDC → /backup (auto-bootstrap there)
               });
     if (widget.clients.isEmpty) widget.clients.add(candidate);
     return candidate;
@@ -220,22 +224,27 @@ class MatrixState extends State<Matrix> {
     onRoomKeyRequestSub[name] ??= c.onRoomKeyRequest.stream.listen((
       RoomKeyRequest request,
     ) async {
-      if (widget.clients.any(
-        ((cl) =>
-            cl.userID == request.requestingDevice.userId &&
-            cl.identityKey == request.requestingDevice.curve25519Key),
-      )) {
+      final reqUserId = request.requestingDevice.userId;
+      final isOwnDevice = reqUserId == c.userID;
+      final isRoomMember = request.room
+              .getParticipants([Membership.join])
+              .any((u) => u.id == reqUserId) ||
+          (request.room.isDirectChat &&
+              request.room.directChatMatrixID == reqUserId);
+
+      if (!request.requestingDevice.blocked && (isOwnDevice || isRoomMember)) {
         Logs().i(
-          '[Key Request] Request is from one of our own clients, forwarding the key...',
+          '[Key Request] Forwarding key for room ${request.room.id} to $reqUserId:${request.requestingDevice.deviceId}...',
         );
         await request.forwardKey();
       }
     });
     onKeyVerificationRequestSub[name] ??= c.onKeyVerificationRequest.stream
         .listen((KeyVerification request) async {
-          Logs().i(
-            '[KeyVerification] Verification request handled silently without popup.',
-          );
+          // Verification popups suppressed — auto-crypto handles trust via
+          // selfSign:true during restoreCryptoIdentity. No manual emoji/number
+          // verification needed (Signal/WhatsApp-style experience).
+          Logs().d('Suppressed key verification request: ${request.transactionId}');
         });
     onLogoutSub[name] ??= c.onLoginStateChanged.stream
         .where((state) => state == LoginState.loggedOut)
@@ -266,12 +275,14 @@ class MatrixState extends State<Matrix> {
           FluffyChatApp.router.go('/');
         });
     onUiaRequest[name] ??= c.onUiaRequest.stream.listen(uiaRequestHandler);
-    if (PlatformInfos.isWeb || PlatformInfos.isLinux) {
+    if (PlatformInfos.isWeb || PlatformInfos.isDesktop) {
       FlutterLocalNotificationsPlugin().initialize(
         settings: InitializationSettings(
           linux: LinuxInitializationSettings(
             defaultActionName: FluffyChatNotificationActions.open.name,
           ),
+          windows: ClientManager.windowsNotificationSettings,
+          macOS: const DarwinInitializationSettings(),
         ),
         onDidReceiveNotificationResponse: (response) => notificationTap(
           response,
@@ -303,6 +314,9 @@ class MatrixState extends State<Matrix> {
   void initMatrix() {
     for (final c in widget.clients) {
       _registerSubs(c.clientName);
+      if (c.isLogged()) {
+        unawaited(AutoCryptoSetup.setup(c));
+      }
     }
 
     if (PlatformInfos.isMobile) {
@@ -348,6 +362,9 @@ class MatrixState extends State<Matrix> {
         client.backgroundSync = foreground;
         client.requestHistoryOnLimitedTimeline = !foreground;
         Logs().v('Set background sync to', foreground);
+      }
+      if (state == AppLifecycleState.resumed && client.isLogged()) {
+        unawaited(AutoCryptoSetup.setup(client));
       }
     }
   }

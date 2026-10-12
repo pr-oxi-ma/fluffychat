@@ -62,7 +62,16 @@ class UrlLauncher {
       if (consent != OkCancelResult.ok) return;
     }
 
-    if (!{'https', 'http'}.contains(uri.scheme)) {
+    final scheme = uri.scheme.toLowerCase();
+    // Block dangerous and injection URI schemes
+    if ({'javascript', 'data', 'blob', 'file', 'content'}.contains(scheme)) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text(l10n.cantOpenUri(url!))),
+      );
+      return;
+    }
+
+    if (!{'https', 'http'}.contains(scheme)) {
       // just launch non-https / non-http uris directly
 
       // we need to transmute geo URIs on desktop and on iOS

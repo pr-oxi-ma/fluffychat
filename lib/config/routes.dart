@@ -48,9 +48,20 @@ abstract class AppRoutes {
   static FutureOr<String?> loggedInRedirect(
     BuildContext context,
     GoRouterState state,
-  ) => Matrix.of(context).widget.clients.any((client) => client.isLogged())
-      ? '/rooms'
-      : null;
+  ) {
+    final path = state.matchedLocation;
+    if (path.endsWith('/login') ||
+        path.endsWith('/register') ||
+        path.endsWith('/sign_in') ||
+        path.endsWith('/sign_up') ||
+        path.contains('addaccount') ||
+        state.extra != null) {
+      return null;
+    }
+    return Matrix.of(context).widget.clients.any((client) => client.isLogged())
+        ? '/rooms'
+        : null;
+  }
 
   static FutureOr<String?> loggedOutRedirect(
     BuildContext context,
@@ -79,31 +90,35 @@ abstract class AppRoutes {
           path: 'sign_in',
           pageBuilder: (context, state) =>
               defaultPageBuilder(context, state, SignInPage(signUp: false)),
-          redirect: loggedInRedirect,
         ),
         GoRoute(
           path: 'sign_up',
           pageBuilder: (context, state) =>
               defaultPageBuilder(context, state, SignInPage(signUp: true)),
-          redirect: loggedInRedirect,
         ),
         GoRoute(
           path: 'login',
           pageBuilder: (context, state) => defaultPageBuilder(
             context,
             state,
-            Login(client: state.extra as Client),
+            Login(
+              client: state.extra is Client
+                  ? (state.extra as Client)
+                  : Matrix.of(context).client,
+            ),
           ),
-          redirect: loggedInRedirect,
         ),
         GoRoute(
           path: 'register',
           pageBuilder: (context, state) => defaultPageBuilder(
             context,
             state,
-            NativeRegister(client: state.extra as Client),
+            NativeRegister(
+              client: state.extra is Client
+                  ? (state.extra as Client)
+                  : Matrix.of(context).client,
+            ),
           ),
-          redirect: loggedInRedirect,
         ),
       ],
     ),
@@ -320,7 +335,24 @@ abstract class AppRoutes {
                           pageBuilder: (context, state) => defaultPageBuilder(
                             context,
                             state,
-                            Login(client: state.extra as Client),
+                            Login(
+                              client: state.extra is Client
+                                  ? (state.extra as Client)
+                                  : Matrix.of(context).client,
+                            ),
+                          ),
+                          redirect: loggedOutRedirect,
+                        ),
+                        GoRoute(
+                          path: 'register',
+                          pageBuilder: (context, state) => defaultPageBuilder(
+                            context,
+                            state,
+                            NativeRegister(
+                              client: state.extra is Client
+                                  ? (state.extra as Client)
+                                  : Matrix.of(context).client,
+                            ),
                           ),
                           redirect: loggedOutRedirect,
                         ),

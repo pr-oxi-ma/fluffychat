@@ -5,92 +5,73 @@
 
 import 'package:fluffychat/l10n/l10n.dart';
 import 'package:fluffychat/pages/bootstrap/view_model/bootstrap_view_model.dart';
-import 'package:fluffychat/pages/bootstrap/widgets/new_passphrase_view.dart';
 import 'package:fluffychat/pages/bootstrap/widgets/restore_bootstrap_view.dart';
-import 'package:fluffychat/pages/bootstrap/widgets/store_recovery_key_view.dart';
-import 'package:fluffychat/widgets/adaptive_dialogs/show_ok_cancel_alert_dialog.dart';
 import 'package:fluffychat/widgets/layouts/login_scaffold.dart';
 import 'package:fluffychat/widgets/matrix.dart';
 import 'package:fluffychat/widgets/view_model_builder.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// Simplified bootstrap page for SSO/OIDC fallback.
+///
+/// For password login: user never sees this page (handled by login.dart).
+/// For SSO/OIDC: auto-bootstrap runs silently. Only if it fails does the
+/// user see a recovery key input (rare — only when switching to a new device
+/// without secure storage access).
 class BootstrapPage extends StatelessWidget {
   final bool reset;
   const BootstrapPage({required this.reset, super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ViewModelBuilder(
       create: () =>
           BootstrapViewModel(client: Matrix.of(context).client, reset: reset),
       builder: (context, viewModel, _) {
         final cryptoIdentityState = viewModel.value.cryptoIdentityState;
-        if ((cryptoIdentityState?.connected == true ||
-                cryptoIdentityState?.initialized == true) &&
-            !reset) {
+
+        // Auto-redirect to rooms once crypto is connected
+        if (cryptoIdentityState?.connected == true && !reset) {
           WidgetsBinding.instance.addPostFrameCallback(
             (_) => viewModel.goToRoomsPageAfterSuccess(context),
           );
         }
 
-        final title = cryptoIdentityState == null
-            ? L10n.of(context).loadingPleaseWait
-            : cryptoIdentityState.initialized && !viewModel.value.reset
-            ? L10n.of(context).restoreCryptoIdentity
-            : viewModel.value.reset
-            ? viewModel.value.recoveryKey != null
-                  ? L10n.of(context).youAreReadyToStart
-                  : L10n.of(context).resetCryptoIdentity
-            : L10n.of(context).setUpCryptoIdentity;
+        // Still loading or auto-bootstrap in progress — show spinner only
+        if (cryptoIdentityState == null ||
+            (!cryptoIdentityState.connected && !cryptoIdentityState.initialized)) {
+          return LoginScaffold(
+            appBar: AppBar(
+              automaticallyImplyLeading: false,
+              title: Text(L10n.of(context).loadingPleaseWait),
+            ),
+            body: const Center(child: CircularProgressIndicator.adaptive()),
+          );
+        }
 
+        // Auto-bootstrap succeeded but connected check hasn't triggered yet
+        if (cryptoIdentityState.connected && !reset) {
+          return LoginScaffold(
+            appBar: AppBar(
+              automaticallyImplyLeading: false,
+              title: Text(L10n.of(context).loadingPleaseWait),
+            ),
+            body: const Center(child: CircularProgressIndicator.adaptive()),
+          );
+        }
+
+        // Fallback: auto-bootstrap failed, need manual recovery key input.
+        // This only happens for SSO users on a completely new device without
+        // access to their previous secure storage. Rare case.
         return LoginScaffold(
           appBar: AppBar(
             automaticallyImplyLeading: false,
-            leading: viewModel.value.recoveryKey != null
-                ? null
-                : CloseButton(
-                    onPressed: () async {
-                      if (!reset) {
-                        final consent = await showOkCancelAlertDialog(
-                          context: context,
-                          title: L10n.of(context).skipChatBackup,
-                          message: L10n.of(context).skipChatBackupWarning,
-                          okLabel: L10n.of(context).skip,
-                          isDestructive: true,
-                        );
-                        if (consent != OkCancelResult.ok) return;
-                        if (!context.mounted) return;
-                      }
-                      context.go('/rooms');
-                    },
-                  ),
-            title: Text(title),
-            actions: [
-              if (viewModel.value.recoveryKey != null)
-                Padding(
-                  padding: EdgeInsets.all(8),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: theme.colorScheme.onPrimary,
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                    ),
-                    onPressed: () => context.go('/rooms'),
-                    child: Text(L10n.of(context).continueText),
-                  ),
-                ),
-            ],
+            leading: CloseButton(
+              onPressed: () => context.go('/rooms'),
+            ),
+            title: Text(L10n.of(context).restoreCryptoIdentity),
           ),
-
-          body: cryptoIdentityState == null
-              ? Center(child: CircularProgressIndicator.adaptive())
-              : !cryptoIdentityState.initialized || viewModel.value.reset
-              ? viewModel.value.recoveryKey == null
-                    ? NewPassphraseView(viewModel)
-                    : StoreRecoveryKeyView(viewModel)
-              : RestoreBootstrapView(viewModel),
+          body: RestoreBootstrapView(viewModel),
         );
       },
     );

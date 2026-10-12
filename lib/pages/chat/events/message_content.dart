@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:async';
 import 'dart:math';
 
 import 'package:fluffychat/config/setting_keys.dart';
@@ -154,6 +155,12 @@ class MessageContent extends StatelessWidget {
               }
             }
             continue textmessage;
+          case MessageTypes.BadEncrypted:
+            return BadEncryptedWidget(
+              event: event,
+              textColor: textColor,
+              fontSize: fontSize,
+            );
           case MessageTypes.Text:
           case MessageTypes.Notice:
           case MessageTypes.Emote:
@@ -315,6 +322,113 @@ class _ButtonContent extends StatelessWidget {
           '$icon  $label',
           style: TextStyle(color: textColor, fontSize: fontSize),
         ),
+      ),
+    );
+  }
+}
+
+class BadEncryptedWidget extends StatefulWidget {
+  final Event event;
+  final Color textColor;
+  final double fontSize;
+
+  const BadEncryptedWidget({
+    super.key,
+    required this.event,
+    required this.textColor,
+    required this.fontSize,
+  });
+
+  @override
+  State<BadEncryptedWidget> createState() => _BadEncryptedWidgetState();
+}
+
+class _BadEncryptedWidgetState extends State<BadEncryptedWidget> {
+  bool _isAttempting = true;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Auto-request missing session key immediately if possible
+    if (widget.event.content['can_request_session'] == true) {
+      final sessionId = widget.event.content.tryGet<String>('session_id');
+      final senderKey = widget.event.content.tryGet<String>('sender_key');
+      if (sessionId != null && senderKey != null) {
+        widget.event.room.client.encryption?.keyManager.maybeAutoRequest(
+          widget.event.room.id,
+          sessionId,
+          senderKey,
+          tryOnlineBackup: true,
+          onlineKeyBackupOnly: false,
+        );
+      }
+    }
+
+    // Keep attempting status active for 8 seconds before falling back
+    _timer = Timer(const Duration(seconds: 8), () {
+      if (mounted) {
+        setState(() {
+          _isAttempting = false;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isAttempting) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox.square(
+              dimension: 13,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.8,
+                color: widget.textColor.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Decrypting...',
+              style: TextStyle(
+                color: widget.textColor.withOpacity(0.8),
+                fontSize: widget.fontSize,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 15,
+            color: widget.textColor.withOpacity(0.7),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            L10n.of(context).messageNotDecryptable,
+            style: TextStyle(
+              color: widget.textColor.withOpacity(0.8),
+              fontSize: widget.fontSize,
+            ),
+          ),
+        ],
       ),
     );
   }

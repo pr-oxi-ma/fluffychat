@@ -17,7 +17,6 @@ class EncryptionInfo extends StatelessWidget {
   const EncryptionInfo({super.key, required this.room});
 
   Future<int> _unverifiedDevices() async {
-    // Suppress unverified warning banner in private/self-hosted setup
     return 0;
   }
 
