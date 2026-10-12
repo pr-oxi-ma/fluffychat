@@ -77,7 +77,19 @@ class NewPrivateChatController extends State<NewPrivateChat> {
     if (searchTerm.isValidMatrixIdStrict() &&
         searchTerm.sigil == '@' &&
         !profiles.any((profile) => profile.userId == searchTerm)) {
-      profiles.add(Profile(userId: searchTerm));
+      try {
+        final info =
+            await Matrix.of(context).client.getUserProfile(searchTerm);
+        if (info.displayname != null || info.avatarUrl != null) {
+          profiles.add(Profile(
+            userId: searchTerm,
+            displayName: info.displayname,
+            avatarUrl: info.avatarUrl,
+          ));
+        }
+      } catch (_) {
+        // User does not exist on the homeserver. Do not add fake profile.
+      }
     }
 
     return profiles;
