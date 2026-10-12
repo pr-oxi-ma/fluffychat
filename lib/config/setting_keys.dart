@@ -76,7 +76,7 @@ enum AppSettings<T> {
   chatFilter<String>('chat.fluffy.chat_filter', 'allChats'),
   hideRoomsInSpaces<bool>('chat.fluffy.hideRoomsInSpaces', false),
   showThumbnailsInTimeline<bool>('chat.fluffy.showThumbnailsInTimeline', true),
-  doubleTapToReact<bool>('chat.fluffy.double_tap_to_react', false),
+  doubleTapToReact<bool>('chat.fluffy.double_tap_to_react', true),
   doubleTapReaction<String>('chat.fluffy.double_tap_reaction', '❤️'),
   benchmarksInLogs<bool>('chat.fluffy.benchmarks_in_logs', false),
   autoSendErrorReports<bool?>('chat.fluffy.auto_send_eror_reports', null),
@@ -130,11 +130,13 @@ enum AppSettings<T> {
     if (store.getBool(AppSettings.sendOnEnter.key) == null) {
       await store.setBool(AppSettings.sendOnEnter.key, !PlatformInfos.isMobile);
     }
-    if (store.getBool(AppSettings.doubleTapToReact.key) == null) {
+    if (store.getBool(AppSettings.doubleTapToReact.key) == null ||
+        store.getBool('chat.fluffy.double_tap_to_react_v2') != true) {
       await store.setBool(
         AppSettings.doubleTapToReact.key,
-        PlatformInfos.isMobile,
+        true,
       );
+      await store.setBool('chat.fluffy.double_tap_to_react_v2', true);
     }
 
     // Load configuration from config.json file or MDM:
@@ -170,7 +172,7 @@ extension AppSettingsBoolNExtension on AppSettings<bool?> {
         error.stackTrace,
       );
     }
-    return value.asValue?.value;
+    return value.asValue?.value ?? defaultValue;
   }
 
   Future<void> setItem(bool value) => AppSettings.store.setBool(key, value);
