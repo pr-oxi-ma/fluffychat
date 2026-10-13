@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'dart:math';
+
 import 'package:collection/collection.dart';
 import 'package:fluffychat/config/app_config.dart';
 import 'package:fluffychat/config/setting_keys.dart';
@@ -151,7 +153,7 @@ abstract class ClientManager {
           ShareKeysWith.all,
       onSoftLogout: enableSoftLogout ? (c) => c.refreshAccessToken() : null,
       sendTimelineEventTimeout: Duration(
-        seconds: AppSettings.sendTimelineEventTimeout.value,
+        seconds: max(AppSettings.sendTimelineEventTimeout.value, 180),
       ),
     );
   }
@@ -165,7 +167,13 @@ abstract class ClientManager {
 
   static Future<void> sendInitNotification(String title, String body) async {
     if (kIsWeb) {
-      html.Notification(title, body: body);
+      try {
+        if (html.Notification.permission == 'granted') {
+          html.Notification(title, body: body);
+        }
+      } catch (e) {
+        Logs().d('Web init notification not supported or failed', e);
+      }
       return;
     }
 

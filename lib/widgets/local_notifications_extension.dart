@@ -92,12 +92,18 @@ extension LocalNotificationsExtension on MatrixState {
 
       if (AppSettings.webNotificationSound.value) _audioPlayer.play();
 
-      html.Notification(
-        title,
-        body: body,
-        icon: thumbnailUri?.toString(),
-        tag: event.room.id,
-      );
+      try {
+        if (html.Notification.permission == 'granted') {
+          html.Notification(
+            title,
+            body: body,
+            icon: thumbnailUri?.toString(),
+            tag: event.room.id,
+          );
+        }
+      } catch (e) {
+        Logs().d('Web notification not supported or failed', e);
+      }
       return;
     }
 

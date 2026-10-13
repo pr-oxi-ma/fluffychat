@@ -71,7 +71,7 @@ enum AppSettings<T> {
     'https://fluffychat.im/privacy',
   ),
   tos<String>('chat.fluffy.tos_url', 'https://fluffychat.im/tos'),
-  sendTimelineEventTimeout<int>('chat.fluffy.send_timeline_event_timeout', 15),
+  sendTimelineEventTimeout<int>('chat.fluffy.send_timeline_event_timeout', 180),
   webNotificationSound<bool>('chat.fluffy.web_notification_sound', true),
   chatFilter<String>('chat.fluffy.chat_filter', 'allChats'),
   hideRoomsInSpaces<bool>('chat.fluffy.hideRoomsInSpaces', false),
