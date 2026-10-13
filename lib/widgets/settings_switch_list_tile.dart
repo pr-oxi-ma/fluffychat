@@ -33,7 +33,7 @@ class SettingsSwitchListTileState extends State<SettingsSwitchListTile> {
     return SwitchListTile.adaptive(
       value: widget.setting.value ??
           widget.defaultValue ??
-          (widget.setting.defaultValue as bool?) ??
+          widget.setting.defaultValue ??
           false,
       title: Text(widget.title),
       subtitle: subtitle == null ? null : Text(subtitle),

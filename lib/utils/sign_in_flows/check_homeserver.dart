@@ -42,6 +42,7 @@ Future<void> connectToHomeserverFlow(
         loginFlows.any((flow) => flow.type == 'm.login.password');
     final supportsSso = loginFlows.any((flow) => flow.type == 'm.login.sso');
 
+    if (!context.mounted) return;
     final currentPath = GoRouterState.of(context).uri.path;
     final basePath = currentPath.contains('addaccount') || currentPath.startsWith('/rooms')
         ? '/rooms/settings/addaccount'
