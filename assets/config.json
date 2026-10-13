@@ -1,7 +1,7 @@
 {
   "applicationName": "FluffyChat",
-  "defaultHomeserver": "stuart-differences-simply-lover.trycloudflare.com",
-  "presetHomeserver": "stuart-differences-simply-lover.trycloudflare.com",
+  "defaultHomeserver": "hs.llc.qzz.io",
+  "presetHomeserver": "hs.llc.qzz.io",
   "welcomeText": "Simple, secure & privacy-first messaging",
   "sendTypingNotifications": true,
   "sendPublicReadReceipts": true,

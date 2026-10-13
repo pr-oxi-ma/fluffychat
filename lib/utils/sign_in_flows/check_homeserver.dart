@@ -42,10 +42,16 @@ Future<void> connectToHomeserverFlow(
         loginFlows.any((flow) => flow.type == 'm.login.password');
     final supportsSso = loginFlows.any((flow) => flow.type == 'm.login.sso');
 
+    if (!context.mounted) return;
+    final currentPath = GoRouterState.of(context).uri.path;
+    final basePath = currentPath.contains('addaccount') || currentPath.startsWith('/rooms')
+        ? '/rooms/settings/addaccount'
+        : '/home';
+
     if (signUp && AppConfig.enableNativeInAppRegistration) {
       // 100% Native In-App Registration inside FluffyChat
       if (!context.mounted) return;
-      context.push('/home/register', extra: client);
+      context.push('$basePath/register', extra: client);
       setState(AsyncSnapshot.withData(ConnectionState.done, true));
       return;
     }
@@ -55,7 +61,7 @@ Future<void> connectToHomeserverFlow(
         supportsPassword) {
       // 100% Native In-App Login inside FluffyChat
       if (!context.mounted) return;
-      context.push('/home/login', extra: client);
+      context.push('$basePath/login', extra: client);
       setState(AsyncSnapshot.withData(ConnectionState.done, true));
       return;
     }
@@ -86,7 +92,7 @@ Future<void> connectToHomeserverFlow(
       await ssoLoginFlow(client, context, signUp, loginFlows);
     } else {
       if (!context.mounted) return;
-      context.push('/home/login', extra: client);
+      context.push('$basePath/login', extra: client);
       setState(AsyncSnapshot.withData(ConnectionState.done, true));
       return;
     }

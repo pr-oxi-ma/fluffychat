@@ -324,7 +324,34 @@ abstract class AppRoutes {
                           ),
                           redirect: loggedOutRedirect,
                         ),
+                        GoRoute(
+                          path: 'register',
+                          pageBuilder: (context, state) => defaultPageBuilder(
+                            context,
+                            state,
+                            NativeRegister(client: state.extra as Client),
+                          ),
+                          redirect: loggedOutRedirect,
+                        ),
                       ],
+                    ),
+                    GoRoute(
+                      path: 'login',
+                      pageBuilder: (context, state) => defaultPageBuilder(
+                        context,
+                        state,
+                        Login(client: state.extra as Client),
+                      ),
+                      redirect: loggedOutRedirect,
+                    ),
+                    GoRoute(
+                      path: 'register',
+                      pageBuilder: (context, state) => defaultPageBuilder(
+                        context,
+                        state,
+                        NativeRegister(client: state.extra as Client),
+                      ),
+                      redirect: loggedOutRedirect,
                     ),
                     GoRoute(
                       path: 'homeserver',
