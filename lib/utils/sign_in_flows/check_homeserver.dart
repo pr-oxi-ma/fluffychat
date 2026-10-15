@@ -78,7 +78,7 @@ Future<void> connectToHomeserverFlow(
 
     if (context.mounted) {
       setState(AsyncSnapshot.withData(ConnectionState.done, true));
-      context.go('/backup');
+      context.go('/rooms');
     }
   } catch (e, s) {
     Logs().w('Unable to login', e, s);

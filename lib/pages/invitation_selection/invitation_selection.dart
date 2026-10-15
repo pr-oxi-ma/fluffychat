@@ -105,17 +105,49 @@ class InvitationSelectionController extends State<InvitationSelection> {
     } finally {
       setState(() => loading = false);
     }
-    setState(() {
-      foundProfiles = List<Profile>.from(response.results);
-      if (text.isValidMatrixIdStrict() &&
-          foundProfiles.indexWhere((profile) => text == profile.userId) == -1) {
-        setState(
-          () => foundProfiles = [
-            Profile.fromJson({'user_id': text}),
-          ],
-        );
+    final client = matrix.client;
+    final profiles = List<Profile>.from(response.results);
+
+    // Determine target MXID candidate for direct lookup
+    String? candidate;
+    final trimmed = text.trim();
+    if (trimmed.isValidMatrixIdStrict() && trimmed.sigil == '@') {
+      candidate = trimmed;
+    } else {
+      final domain = client.userID?.domain;
+      if (domain != null &&
+          domain.isNotEmpty &&
+          !trimmed.contains(':') &&
+          !trimmed.contains(' ')) {
+        final rawUser =
+            trimmed.startsWith('@') ? trimmed.substring(1) : trimmed;
+        if (rawUser.isNotEmpty) {
+          final constructed = '@$rawUser:$domain';
+          if (constructed.isValidMatrixIdStrict()) {
+            candidate = constructed;
+          }
+        }
       }
-    });
+    }
+
+    if (candidate != null && !profiles.any((p) => p.userId == candidate)) {
+      try {
+        final info = await client.getUserProfile(candidate);
+        profiles.add(Profile(
+          userId: candidate,
+          displayName: info.displayname,
+          avatarUrl: info.avatarUrl,
+        ));
+      } catch (_) {
+        // User does not exist on the homeserver. Do not add fake profile.
+      }
+    }
+
+    if (mounted && currentSearchTerm == text) {
+      setState(() {
+        foundProfiles = profiles;
+      });
+    }
   }
 
   @override

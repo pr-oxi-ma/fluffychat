@@ -87,7 +87,7 @@ class LoginController extends State<Login> {
         initialDeviceDisplayName: PlatformInfos.appDisplayName,
       );
       if (mounted) {
-        context.go('/backup');
+        context.go('/rooms');
       }
     } on MatrixException catch (exception) {
       setState(() => passwordError = exception.errorMessage);

@@ -49,20 +49,7 @@ class BootstrapPage extends StatelessWidget {
             leading: viewModel.value.recoveryKey != null
                 ? null
                 : CloseButton(
-                    onPressed: () async {
-                      if (!reset) {
-                        final consent = await showOkCancelAlertDialog(
-                          context: context,
-                          title: L10n.of(context).skipChatBackup,
-                          message: L10n.of(context).skipChatBackupWarning,
-                          okLabel: L10n.of(context).skip,
-                          isDestructive: true,
-                        );
-                        if (consent != OkCancelResult.ok) return;
-                        if (!context.mounted) return;
-                      }
-                      context.go('/rooms');
-                    },
+                    onPressed: () => context.go('/rooms'),
                   ),
             title: Text(title),
             actions: [

@@ -98,13 +98,11 @@ class NewPrivateChatController extends State<NewPrivateChat> {
     if (candidate != null && !profiles.any((p) => p.userId == candidate)) {
       try {
         final info = await client.getUserProfile(candidate);
-        if (info.displayname != null || info.avatarUrl != null) {
-          profiles.add(Profile(
-            userId: candidate,
-            displayName: info.displayname,
-            avatarUrl: info.avatarUrl,
-          ));
-        }
+        profiles.add(Profile(
+          userId: candidate,
+          displayName: info.displayname,
+          avatarUrl: info.avatarUrl,
+        ));
       } catch (_) {
         // User does not exist on the homeserver. Do not add fake profile.
       }
