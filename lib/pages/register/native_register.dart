@@ -54,6 +54,8 @@ class NativeRegisterController extends State<NativeRegister> {
   bool showPassword = false;
   bool showTokenField = false;
   bool emailRequired = false;
+  bool probingFlows = false;
+  bool registrationDisabled = false;
   RegistrationStep step = RegistrationStep.form;
 
   // Email verification state
@@ -62,6 +64,84 @@ class NativeRegisterController extends State<NativeRegister> {
   String? _clientSecret;
   Timer? _resendCooldownTimer;
   int _resendCooldownSeconds = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _detectServerAuthFlows();
+    });
+  }
+
+  /// Dynamically inspect backend (Tuwunel/Matrix) UIAA registration flows
+  /// and configure the form fields accordingly before user interaction.
+  Future<void> _detectServerAuthFlows() async {
+    // Check if token was provided in query parameters (e.g. ?token=matrix or ?invite=matrix)
+    try {
+      final uri = GoRouterState.of(context).uri;
+      final queryToken = uri.queryParameters['token'] ??
+          uri.queryParameters['invite'] ??
+          uri.queryParameters['registration_token'];
+      if (queryToken != null && queryToken.isNotEmpty) {
+        registrationTokenController.text = queryToken;
+        showTokenField = true;
+      }
+    } catch (_) {}
+
+    setState(() => probingFlows = true);
+
+    try {
+      // Matrix spec: Send an initial empty register probe to receive HTTP 401 UIAA challenge
+      // containing the server's supported flows, stages, and current session ID.
+      await widget.client.register(
+        username: '',
+        password: '',
+      );
+    } on MatrixException catch (e) {
+      if (!mounted) return;
+
+      if (e.errcode == 'M_FORBIDDEN') {
+        setState(() {
+          registrationDisabled = true;
+          generalError = e.errorMessage.isNotEmpty
+              ? e.errorMessage
+              : 'Registration is disabled on this server';
+          probingFlows = false;
+        });
+        return;
+      }
+
+      _uiaaSession = e.session ?? e.raw['session'] as String?;
+      final flows = e.raw['flows'] as List?;
+
+      if (flows != null) {
+        final allFlowStages = flows
+            .map((f) => List<String>.from((f as Map)['stages'] as List))
+            .toList();
+
+        final hasDummyFlow = allFlowStages.any((stages) =>
+            stages.length == 1 && stages.first == 'm.login.dummy');
+
+        final allStages = allFlowStages.expand((s) => s).toSet();
+        final needsToken = allStages.contains('m.login.registration_token');
+        final needsEmail = allStages.contains('m.login.email.identity');
+
+        setState(() {
+          showTokenField = (needsToken && !hasDummyFlow) ||
+              registrationTokenController.text.isNotEmpty;
+          emailRequired = needsEmail && !hasDummyFlow;
+          probingFlows = false;
+        });
+        return;
+      }
+    } catch (_) {
+      // If network fails during background probe, let manual submit handle it gracefully
+    }
+
+    if (mounted) {
+      setState(() => probingFlows = false);
+    }
+  }
 
   void toggleShowPassword() =>
       setState(() => showPassword = !loading && !showPassword);
@@ -710,7 +790,12 @@ class NativeRegisterController extends State<NativeRegister> {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 24),
+          if (probingFlows) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(minHeight: 2),
+            const SizedBox(height: 16),
+          ] else
+            const SizedBox(height: 24),
 
           // General Error Banner
           if (generalError != null)
@@ -852,7 +937,7 @@ class NativeRegisterController extends State<NativeRegister> {
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.vpn_key_outlined),
                 labelText: 'Registration Token',
-                helperText: 'Invite token required by this server',
+                helperText: 'Invite token required by $homeserverHost',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -871,7 +956,7 @@ class NativeRegisterController extends State<NativeRegister> {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: loading ? null : register,
+            onPressed: (loading || registrationDisabled) ? null : register,
             child: loading
                 ? const SizedBox(
                     width: 24,
@@ -881,7 +966,9 @@ class NativeRegisterController extends State<NativeRegister> {
                     ),
                   )
                 : Text(
-                    l10n.createNewAccount,
+                    registrationDisabled
+                        ? 'Registration Disabled'
+                        : l10n.createNewAccount,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
