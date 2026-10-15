@@ -25,10 +25,18 @@ jobs:
       - run: rm ./assets/vodozemac/.gitignore
       - run: flutter pub get
       - name: Build Release Web
-        run: flutter build web --dart-define=FLUTTER_WEB_CANVASKIT_URL=canvaskit/ --release --source-maps --base-href "/nightly/"
+        run: flutter build web --dart-define=FLUTTER_WEB_CANVASKIT_URL=canvaskit/ --release --source-maps --base-href "/"
       - run: mv build/web/ public
+      - name: Upload Web Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fluffychat-web
+          path: public/
       - name: Deploy to GitHub Pages
+        if: ${{ env.PAGES_DEPLOY_TOKEN != '' }}
         uses: peaceiris/actions-gh-pages@v4
+        env:
+          PAGES_DEPLOY_TOKEN: ${{ secrets.PAGES_DEPLOY_TOKEN }}
         with:
           personal_token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
           publish_dir: ./public
@@ -36,6 +44,7 @@ jobs:
           destination_dir: nightly
 
   deploy_playstore_internal:
+    if: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
     runs-on: ubuntu-latest
     concurrency:
       group: deploy_playstore
