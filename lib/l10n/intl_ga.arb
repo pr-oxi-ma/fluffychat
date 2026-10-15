@@ -1284,11 +1284,6 @@
         "type": "String",
         "placeholders": {}
     },
-    "youHaveBeenBannedFromThisChat": "Cuireadh cosc ort ón gcomhrá seo",
-    "@youHaveBeenBannedFromThisChat": {
-        "type": "String",
-        "placeholders": {}
-    },
     "youAreNoLongerParticipatingInThisChat": "Níl tú ag glacadh páirte sa chomhrá seo a thuilleadh",
     "@youAreNoLongerParticipatingInThisChat": {
         "type": "String",
@@ -2837,5 +2832,16 @@
                 "type": "String"
             }
         }
-    }
+    },
+    "updateAvailable": "Nuashonrú {version} ar fáil",
+    "@updateAvailable": {
+        "type": "String",
+        "placeholders": {
+            "version": {
+                "type": "String"
+            }
+        }
+    },
+    "download": "Íoslódáil",
+    "sharedLocation": "Suíomh comhroinnte"
 }

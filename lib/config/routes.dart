@@ -22,6 +22,7 @@ import 'package:fluffychat/pages/invitation_selection/invitation_selection.dart'
 import 'package:fluffychat/pages/login/login.dart';
 import 'package:fluffychat/pages/new_group/new_group.dart';
 import 'package:fluffychat/pages/new_private_chat/new_private_chat.dart';
+import 'package:fluffychat/pages/register/native_register.dart';
 import 'package:fluffychat/pages/settings/settings.dart';
 import 'package:fluffychat/pages/settings_3pid/settings_3pid.dart';
 import 'package:fluffychat/pages/settings_chat/settings_chat.dart';
@@ -92,6 +93,15 @@ abstract class AppRoutes {
             context,
             state,
             Login(client: state.extra as Client),
+          ),
+          redirect: loggedInRedirect,
+        ),
+        GoRoute(
+          path: 'register',
+          pageBuilder: (context, state) => defaultPageBuilder(
+            context,
+            state,
+            NativeRegister(client: state.extra as Client),
           ),
           redirect: loggedInRedirect,
         ),
@@ -314,7 +324,34 @@ abstract class AppRoutes {
                           ),
                           redirect: loggedOutRedirect,
                         ),
+                        GoRoute(
+                          path: 'register',
+                          pageBuilder: (context, state) => defaultPageBuilder(
+                            context,
+                            state,
+                            NativeRegister(client: state.extra as Client),
+                          ),
+                          redirect: loggedOutRedirect,
+                        ),
                       ],
+                    ),
+                    GoRoute(
+                      path: 'login',
+                      pageBuilder: (context, state) => defaultPageBuilder(
+                        context,
+                        state,
+                        Login(client: state.extra as Client),
+                      ),
+                      redirect: loggedOutRedirect,
+                    ),
+                    GoRoute(
+                      path: 'register',
+                      pageBuilder: (context, state) => defaultPageBuilder(
+                        context,
+                        state,
+                        NativeRegister(client: state.extra as Client),
+                      ),
+                      redirect: loggedOutRedirect,
                     ),
                     GoRoute(
                       path: 'homeserver',

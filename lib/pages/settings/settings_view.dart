@@ -116,11 +116,11 @@ class SettingsView extends StatelessWidget {
             ),
             SwitchListTile.adaptive(
               controlAffinity: ListTileControlAffinity.trailing,
-              value: controller.cryptoIdentityConnected == true,
+              value: true,
               secondary: const Icon(Icons.backup_outlined),
               title: Text(L10n.of(context).chatBackup),
-              onChanged: controller.firstRunBootstrapAction,
-              contentPadding: EdgeInsets.only(left: 16, right: 8),
+              onChanged: null,
+              contentPadding: const EdgeInsets.only(left: 16, right: 8),
             ),
             FutureBuilder(
               future: Result.capture(

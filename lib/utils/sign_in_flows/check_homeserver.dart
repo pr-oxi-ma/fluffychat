@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import 'package:fluffychat/config/app_config.dart';
 import 'package:fluffychat/config/setting_keys.dart';
 import 'package:fluffychat/l10n/l10n.dart';
 import 'package:fluffychat/pages/sign_in/view_model/model/public_homeserver_data.dart';
@@ -16,7 +17,6 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 Future<void> connectToHomeserverFlow(
   PublicHomeserverData homeserverData,
@@ -38,11 +38,42 @@ Future<void> connectToHomeserverFlow(
       fetchAuthMetadata: true,
     );
 
-    final regLink = homeserverData.regLink;
+    final supportsPassword =
+        loginFlows.any((flow) => flow.type == 'm.login.password');
     final supportsSso = loginFlows.any((flow) => flow.type == 'm.login.sso');
 
+    if (!context.mounted) return;
+    final currentPath = GoRouterState.of(context).uri.path;
+    final basePath = currentPath.contains('addaccount') || currentPath.startsWith('/rooms')
+        ? '/rooms/settings/addaccount'
+        : '/home';
+
+    if (signUp && AppConfig.enableNativeInAppRegistration) {
+      // 100% Native In-App Registration inside FluffyChat
+      if (!context.mounted) return;
+      context.push('$basePath/register', extra: client);
+      setState(AsyncSnapshot.withData(ConnectionState.done, true));
+      return;
+    }
+
+    if (!signUp &&
+        AppConfig.enableNativeInAppRegistration &&
+        supportsPassword) {
+      // 100% Native In-App Login inside FluffyChat
+      if (!context.mounted) return;
+      context.push('$basePath/login', extra: client);
+      setState(AsyncSnapshot.withData(ConnectionState.done, true));
+      return;
+    }
+
+    final ssoFlow =
+        loginFlows.where((flow) => flow.type == 'm.login.sso').firstOrNull;
+    final ssoProviders =
+        (ssoFlow?.additionalProperties['identity_providers'] as List?);
+    final hasSsoProviders = ssoProviders != null && ssoProviders.isNotEmpty;
+
     if ((kIsWeb || PlatformInfos.isLinux) &&
-        (supportsSso || authMetadata != null || (signUp && regLink != null))) {
+        ((supportsSso && hasSsoProviders) || authMetadata != null)) {
       if (!context.mounted) return;
       final consent = await showOkCancelAlertDialog(
         context: context,
@@ -57,19 +88,11 @@ Future<void> connectToHomeserverFlow(
 
     if (authMetadata != null && AppSettings.enableMatrixNativeOIDC.value) {
       await oidcLoginFlow(client, context, signUp);
-    } else if (supportsSso) {
+    } else if (supportsSso && hasSsoProviders) {
       await ssoLoginFlow(client, context, signUp, loginFlows);
     } else {
-      if (signUp && regLink != null) {
-        await launchUrlString(regLink);
-      }
       if (!context.mounted) return;
-      final pathSegments = List.of(
-        GoRouter.of(context).routeInformationProvider.value.uri.pathSegments,
-      );
-      if (pathSegments.last != 'home') pathSegments.removeLast();
-      pathSegments.add('login');
-      context.push('/${pathSegments.join('/')}', extra: client);
+      context.push('$basePath/login', extra: client);
       setState(AsyncSnapshot.withData(ConnectionState.done, true));
       return;
     }

@@ -1671,11 +1671,6 @@
         "type": "String",
         "placeholders": {}
     },
-    "youHaveBeenBannedFromThisChat": "Foches vetada nesta conversa",
-    "@youHaveBeenBannedFromThisChat": {
-        "type": "String",
-        "placeholders": {}
-    },
     "yourPublicKey": "A túa chave pública",
     "@yourPublicKey": {
         "type": "String",
@@ -2831,5 +2826,16 @@
                 "type": "String"
             }
         }
-    }
+    },
+    "updateAvailable": "Versión {version} dispoñible",
+    "@updateAvailable": {
+        "type": "String",
+        "placeholders": {
+            "version": {
+                "type": "String"
+            }
+        }
+    },
+    "download": "Descargar",
+    "sharedLocation": "Localización compartida"
 }

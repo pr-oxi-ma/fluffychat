@@ -5,6 +5,7 @@
 
 import 'package:fluffychat/l10n/l10n.dart';
 import 'package:fluffychat/widgets/layouts/login_scaffold.dart';
+
 import 'package:material_ui/material_ui.dart';
 
 import 'login.dart';
@@ -133,6 +134,27 @@ class LoginView extends StatelessWidget {
                       child: Text(L10n.of(context).passwordForgotten),
                     ),
                   ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Don't have an account? ",
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: controller.loading
+                            ? null
+                            : controller.handleCreateAccount,
+                        child: Text(L10n.of(context).createNewAccount),
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 16),
               ],
             ),
