@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import 'package:file_picker/file_picker.dart';
+import 'package:fluffychat/utils/auto_vault.dart';
 import 'package:fluffychat/utils/error_reporter.dart';
 import 'package:fluffychat/utils/localized_exception_extension.dart';
 import 'package:fluffychat/utils/platform_infos.dart';
@@ -78,6 +79,22 @@ class BootstrapViewModel extends ValueNotifier<BootstrapViewModelState> {
 
       await client.updateUserDeviceKeys();
 
+      final autoPass = await AutoVault.getPassword(client.userID ?? '');
+      if (autoPass != null && autoPass.isNotEmpty) {
+        enterPassphraseOrRecovController.text = autoPass;
+        try {
+          await client.restoreCryptoIdentity(autoPass);
+          try {
+            await client.encryption?.keyManager.loadAllKeys();
+          } catch (e, s) {
+            Logs().w('Failed to loadAllKeys during auto-restore: $e', e, s);
+          }
+          value.cryptoIdentityState = await client.getCryptoIdentityState();
+          notifyListeners();
+          return;
+        } catch (_) {}
+      }
+
       final devices = value.connectedDevices =
           client.userDeviceKeys[client.userID!]?.deviceKeys.values
               .where(
@@ -103,6 +120,19 @@ class BootstrapViewModel extends ValueNotifier<BootstrapViewModelState> {
         } catch (e, s) {
           Logs().e('Unable to read key from secure storage', e, s);
         }
+      }
+    } else {
+      final autoPass = await AutoVault.getPassword(client.userID ?? '');
+      if (autoPass != null && autoPass.isNotEmpty) {
+        try {
+          value.recoveryKey = await client.initCryptoIdentity(passphrase: autoPass);
+          try {
+            await client.encryption?.keyManager.uploadInboundGroupSessions();
+          } catch (_) {}
+          value.cryptoIdentityState = await client.getCryptoIdentityState();
+          notifyListeners();
+          return;
+        } catch (_) {}
       }
     }
     notifyListeners();
@@ -201,6 +231,11 @@ class BootstrapViewModel extends ValueNotifier<BootstrapViewModelState> {
     notifyListeners();
     try {
       await client.restoreCryptoIdentity(key);
+      try {
+        await client.encryption?.keyManager.loadAllKeys();
+      } catch (e, s) {
+        Logs().w('Failed to loadAllKeys during unlock: $e', e, s);
+      }
       value.isLoading = false;
       value.cryptoIdentityState = await client.getCryptoIdentityState();
       notifyListeners();
@@ -225,6 +260,11 @@ class BootstrapViewModel extends ValueNotifier<BootstrapViewModelState> {
   }
 
   void goToRoomsPageAfterSuccess(BuildContext context) {
+    if (client.encryption?.keyManager.enabled == true) {
+      client.encryption?.keyManager.loadAllKeys().catchError((e, s) {
+        Logs().w('Background loadAllKeys in goToRoomsPageAfterSuccess failed: $e', e, s);
+      });
+    }
     for (final room in client.rooms) {
       final lastEvent = room.lastEvent;
       if (lastEvent == null ||

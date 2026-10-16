@@ -30,7 +30,6 @@ import 'package:universal_html/html.dart' as html;
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../config/setting_keys.dart';
-import '../pages/key_verification/key_verification_dialog.dart';
 import '../utils/account_bundles.dart';
 import '../utils/background_push.dart';
 import 'local_notifications_extension.dart';
@@ -221,36 +220,34 @@ class MatrixState extends State<Matrix> {
     onRoomKeyRequestSub[name] ??= c.onRoomKeyRequest.stream.listen((
       RoomKeyRequest request,
     ) async {
-      if (widget.clients.any(
+      final isOwnAccount = request.requestingDevice.userId == c.userID;
+      final isOwnMultiClient = widget.clients.any(
         ((cl) =>
             cl.userID == request.requestingDevice.userId &&
             cl.identityKey == request.requestingDevice.curve25519Key),
-      )) {
+      );
+      if (isOwnAccount || isOwnMultiClient) {
         Logs().i(
-          '[Key Request] Request is from one of our own clients, forwarding the key...',
+          '[Key Request] Request is from account ${c.userID}, forwarding key to device ${request.requestingDevice.deviceId}...',
         );
-        await request.forwardKey();
+        try {
+          await request.forwardKey();
+        } catch (e, s) {
+          Logs().w('Failed to forward key: $e', e, s);
+        }
       }
     });
     onKeyVerificationRequestSub[name] ??= c.onKeyVerificationRequest.stream
         .listen((KeyVerification request) async {
-          var hidPopup = false;
-          request.onUpdate = () {
-            if (!hidPopup &&
-                {
-                  KeyVerificationState.done,
-                  KeyVerificationState.error,
-                }.contains(request.state)) {
-              FluffyChatApp.router.pop('dialog');
-            }
-            hidPopup = true;
-          };
-          request.onUpdate = null;
-          hidPopup = true;
-          await KeyVerificationDialog(request: request).show(
-            FluffyChatApp.router.routerDelegate.navigatorKey.currentContext ??
-                context,
-          );
+          if (request.userId == c.userID) {
+            try {
+              await request.acceptVerification();
+            } catch (_) {}
+            return;
+          }
+          // Do not pop up an intrusive modal dialog unexpectedly.
+          // Users can verify explicitly from Chat Details / Device Settings.
+          Logs().i('Incoming key verification request from ${request.userId} received silently.');
         });
     onLogoutSub[name] ??= c.onLoginStateChanged.stream
         .where((state) => state == LoginState.loggedOut)

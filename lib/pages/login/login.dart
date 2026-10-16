@@ -15,6 +15,7 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:matrix/matrix.dart';
 
+import '../../utils/auto_vault.dart';
 import '../../utils/platform_infos.dart';
 import 'login_view.dart';
 
@@ -86,6 +87,11 @@ class LoginController extends State<Login> {
         password: passwordController.text,
         initialDeviceDisplayName: PlatformInfos.appDisplayName,
       );
+      final currentUserId = client.userID ?? widget.client.userID;
+      if (currentUserId != null) {
+        await AutoVault.savePassword(currentUserId, passwordController.text);
+      }
+      matrix.cachedPassword = passwordController.text;
       if (mounted) {
         context.go('/backup');
       }
@@ -115,7 +121,10 @@ class LoginController extends State<Login> {
     if (!userId.isValidMatrixIdStrict()) return;
     final oldHomeserver = widget.client.homeserver;
     try {
-      var newDomain = Uri.https(userId.domain!, '');
+      final domain = userId.domain!;
+      var newDomain = (domain.startsWith('localhost') || domain.startsWith('127.0.0.1') || domain.endsWith('matrix.local'))
+          ? Uri.http(domain, '')
+          : Uri.https(domain, '');
       widget.client.homeserver = newDomain;
       DiscoveryInformation? wellKnownInformation;
       try {
