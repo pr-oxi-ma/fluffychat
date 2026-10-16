@@ -932,6 +932,8 @@ class ChatListController extends State<ChatList>
       waitForFirstSync = true;
     });
 
+    // Silenced unverified device warning banner for seamless WhatsApp/Telegram-like experience
+    /*
     if (client.userDeviceKeys[client.userID!]?.deviceKeys.values.any(
           (device) => !device.verified && !device.blocked,
         ) ??
@@ -959,6 +961,7 @@ class ChatListController extends State<ChatList>
         ),
       );
     }
+    */
   }
 
   void setActiveFilter(ActiveFilter filter, String? tag) {
